@@ -1,0 +1,33 @@
+[build]
+  publish = "public"
+
+# Proxy API requests to the live Cloudflare tunnel backend
+[[redirects]]
+  from = "/api/*"
+  to = "https://crm.thedigitalfrog.com/api/:splat"
+  status = 200
+  force = true
+
+# Proxy generated PDF reports & prescriptions to the live backend
+[[redirects]]
+  from = "/prescriptions/*"
+  to = "https://crm.thedigitalfrog.com/prescriptions/:splat"
+  status = 200
+  force = true
+
+# Direct route for Scorecard Diagnostic
+[[redirects]]
+  from = "/scorecard"
+  to = "/scorecard.html"
+  status = 200
+
+# Fallback for SPA routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"

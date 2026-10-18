@@ -1,0 +1,105 @@
+#!/data/data/com.termux/files/usr/bin/env bash
+# start-termux
+# Master launcher for Meta Automation on Android (Termux + Termux:X11 or Headless)
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
+
+PID_FILE="$SCRIPT_DIR/threads-agent.pid"
+LOG_FILE="$SCRIPT_DIR/logs/daemon.log"
+mkdir -p "$SCRIPT_DIR/logs"
+
+echo "=================================================="
+echo "  📱 META AUTOMATION — ANDROID TERMUX RUNNER"
+echo "=================================================="
+
+# 0. Acquire Termux wake lock to prevent Android CPU sleep
+if command -v termux-wake-lock >/dev/null 2>&1; then
+    termux-wake-lock
+    echo "🔒 Termux wake-lock active (CPU background execution preserved)."
+fi
+
+# Parse headless preference
+IS_HEADLESS=false
+for arg in "$@"; do
+    if [ "$arg" == "--headless" ] || [ "$arg" == "-h" ]; then
+        IS_HEADLESS=true
+    fi
+done
+if [ "$BROWSER_HEADLESS" == "1" ] || [ "$BROWSER_HEADLESS" == "true" ]; then
+    IS_HEADLESS=true
+fi
+
+if [ "$1" == "--restart" ] || [ "$1" == "-r" ]; then
+    echo "🔄 Stopping existing automation daemon before restart..."
+    "$SCRIPT_DIR/stop-automation" >/dev/null 2>&1 || true
+    sleep 1
+    shift
+fi
+
+# 1. Detect or initialize display
+ACTIVE_DISPLAY=""
+if (DISPLAY=":0" xdpyinfo >/dev/null 2>&1); then
+    ACTIVE_DISPLAY=":0"
+elif (DISPLAY=":1" xdpyinfo >/dev/null 2>&1); then
+    ACTIVE_DISPLAY=":1"
+elif [ -n "$DISPLAY" ] && (xdpyinfo >/dev/null 2>&1); then
+    ACTIVE_DISPLAY="$DISPLAY"
+fi
+
+if [ "$IS_HEADLESS" = true ]; then
+    echo "[1/4] Headless 24/7 background mode requested (zero display dependency)."
+elif [ -n "$ACTIVE_DISPLAY" ]; then
+    export DISPLAY="$ACTIVE_DISPLAY"
+    echo "[1/4] Termux:X11 display active on $DISPLAY."
+else
+    # Attempt to initialize Termux:X11 on :1 if app is available
+    if command -v termux-x11 >/dev/null 2>&1; then
+        echo "[1/4] Attempting to connect Termux:X11 on display :1..."
+        pkill -9 -f "termux-x11.*:1" >/dev/null 2>&1 || true
+        am broadcast -a com.termux.x11.ACTION_STOP >/dev/null 2>&1 || true
+        rm -f "/data/data/com.termux/files/usr/tmp/.X1-lock" "/tmp/.X1-lock" >/dev/null 2>&1 || true
+        rm -f "/data/data/com.termux/files/usr/tmp/.X11-unix/X1" "/tmp/.X11-unix/X1" >/dev/null 2>&1 || true
+        am start -n com.termux.x11/.MainActivity >/dev/null 2>&1 || true
+        sleep 1
+        nohup termux-x11 :1 -ac >/dev/null 2>&1 &
+        sleep 2
+        if (DISPLAY=":1" xdpyinfo >/dev/null 2>&1); then
+            export DISPLAY=":1"
+            echo "✅ Termux:X11 server active on :1."
+        else
+            echo "ℹ️  Termux:X11 display not open. Running in resilient Headless mode (--headless=new)."
+        fi
+    else
+        echo "ℹ️  Termux:X11 not installed. Running in resilient Headless mode (--headless=new)."
+    fi
+fi
+
+# 2. Ensure chromium CDP is active on port 9222
+echo "[2/4] Verifying chromium CDP on port 9222..."
+if ! curl -s http://127.0.0.1:9222/json/version >/dev/null 2>&1; then
+    echo "🌐 Launching Termux chromium with remote debugging :9222..."
+    node "$SCRIPT_DIR/scripts/launch-browser-cdp.js" "$@"
+fi
+
+
+if curl -s http://127.0.0.1:9222/json/version >/dev/null 2>&1; then
+    echo "✅ Chromium CDP is active and ready on http://127.0.0.1:9222."
+else
+    echo "⚠️  Chromium CDP could not be verified on :9222."
+fi
+
+# 3. Check primary Antigravity AI runtime
+echo "[3/4] Checking Antigravity agentic AI configuration..."
+if command -v agy >/dev/null 2>&1; then
+    echo "✅ Antigravity CLI detected: $(command -v agy)"
+    echo "   Antigravity is the PRIMARY agentic AI runtime."
+else
+    echo "❌ Antigravity CLI (agy) is not available in PATH."
+    echo "   Antigravity with active Gemini session is the required primary engine."
+fi
+
+# 4. Launch Autopilot Mode Selector (Social Autopilot vs Job Autopilot)
+echo "[4/4] Launching Meta Automation Autopilot runtime..."
+exec node "$SCRIPT_DIR/scripts/desktop-runner.js" "$@"
+

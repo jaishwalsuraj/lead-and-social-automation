@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clinical & Digital Growth Scorecard | 2-Minute Diagnostic</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    :root {
+      --sc-bg: #090d16;
+      --sc-card: #0f172a;
+      --sc-card-border: rgba(255, 255, 255, 0.08);
+      --sc-primary: #3b82f6;
+      --sc-accent: #06b6d4;
+      --sc-medical: #10b981;
+      --sc-warning: #f59e0b;
+      --sc-danger: #ef4444;
+      --sc-text: #f8fafc;
+      --sc-muted: #94a3b8;
+    }
+
+    body.scorecard-page {
+      background: radial-gradient(circle at 50% 0%, #172554 0%, #090d16 65%, #050811 100%);
+      color: var(--sc-text);
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sc-header {
+      padding: 1.25rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--sc-card-border);
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .sc-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: #fff;
+    }
+
+    .sc-logo-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #06b6d4, #3b82f6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.1rem;
+      color: #fff;
+      box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
+    }
+
+    .sc-brand-title {
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: -0.01em;
+    }
+
+    .sc-brand-sub {
+      font-size: 0.75rem;
+      color: var(--sc-muted);
+    }
+
+    .sc-header-cta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .sc-container {
+      max-width: 760px;
+      width: 100%;
+      margin: 2.5rem auto 4rem auto;
+      padding: 0 1.25rem;
+      flex: 1;
+    }
+
+    /* Progress bar */
+    .sc-progress-wrap {
+      margin-bottom: 2rem;
+    }
+
+    .sc-progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: var(--sc-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .sc-progress-track {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .sc-progress-fill {
+      height: 100%;
+      width: 16%;
+      background: linear-gradient(90deg, #06b6d4, #3b82f6);
+      border-radius: 999px;
+      transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Step Card */
+    .sc-card {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--sc-card-border);
+      border-radius: 20px;
+      padding: 2.25rem;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(16px);
+      position: relative;
+    }
+
+    .sc-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(6, 182, 212, 0.12);
+      color: #38bdf8;
+      border: 1px solid rgba(6, 182, 212, 0.25);
+      margin-bottom: 1rem;
+    }
+
+    .sc-question-title {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: #fff;
+      margin: 0 0 0.5rem 0;
+      line-height: 1.35;
+    }
+
+    .sc-question-sub {
+      font-size: 0.92rem;
+      color: var(--sc-muted);
+      margin: 0 0 1.75rem 0;
+      line-height: 1.5;
+    }
+
+    /* Options grid */
+    .sc-options {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    .sc-option-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1.15rem 1.25rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1.5px solid rgba(255, 255, 255, 0.07);
+      border-radius: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .sc-option-item:hover {
+      background: rgba(59, 130, 246, 0.08);
+      border-color: rgba(59, 130, 246, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .sc-option-item.selected {
+      background: rgba(6, 182, 212, 0.12);
+      border-color: #06b6d4;
+      box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+    }
+
+    .sc-option-icon {
+      font-size: 1.35rem;
+      line-height: 1;
+      margin-top: 2px;
+    }
+
+    .sc-option-text {
+      flex: 1;
+    }
+
+    .sc-option-label {
+      font-weight: 600;
+      font-size: 0.98rem;
+      color: #f1f5f9;
+      line-height: 1.4;
+    }
+
+    .sc-option-sub {
+      font-size: 0.82rem;
+      color: var(--sc-muted);
+      margin-top: 0.25rem;
+    }
+
+    .sc-nav-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    /* Lead Gate Form */
+    .sc-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .sc-form-grid .full-col {
+      grid-column: span 2;
+    }
+
+    .sc-input-group label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 0.4rem;
+    }
+
+    .sc-input-group input,
+    .sc-input-group select {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.85rem 1rem;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.92rem;
+      transition: all 0.2s;
+    }
+
+    .sc-input-group input:focus,
+    .sc-input-group select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+    }
+
+    .sc-clinical-note {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px dashed rgba(16, 185, 129, 0.3);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      font-size: 0.82rem;
+      color: #a7f3d0;
+      margin-bottom: 1.5rem;
+      line-height: 1.45;
+    }
+
+    /* Results Dashboard */
+    .sc-results-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .sc-score-gauge {
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      background: conic-gradient(#10b981 calc(var(--gauge-score, 45) * 1%), rgba(255, 255, 255, 0.08) 0);
+      margin: 0 auto 1.25rem auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      box-shadow: 0 0 30px rgba(16, 185, 129, 0.25);
+    }
+
+    .sc-score-gauge::after {
+      content: '';
+      position: absolute;
+      width: 108px;
+      height: 108px;
+      border-radius: 50%;
+      background: #0f172a;
+    }
+
+    .sc-score-inner {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+    }
+
+    .sc-score-val {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1;
+    }
+
+    .sc-score-denom {
+      font-size: 0.85rem;
+      color: var(--sc-muted);
+      font-weight: 600;
+    }
+
+    .sc-score-grade {
+      display: inline-block;
+      padding: 0.35rem 1rem;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      margin-top: 0.5rem;
+    }
+
+    .sc-breakdown-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      margin: 1.5rem 0 2rem 0;
+    }
+
+    .sc-subscore-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 12px;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .sc-subscore-val {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .sc-subscore-lbl {
+      font-size: 0.75rem;
+      color: var(--sc-muted);
+      margin-top: 0.25rem;
+    }
+
+    /* Authentic Prescription Pad */
+    .sc-rx-pad {
+      background: #080d1a;
+      border: 2px solid rgba(6, 182, 212, 0.35);
+      border-radius: 16px;
+      padding: 1.75rem;
+      margin: 2rem 0;
+      position: relative;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .sc-rx-watermark {
+      position: absolute;
+      top: 1rem;
+      right: 1.5rem;
+      font-size: 5rem;
+      font-weight: 900;
+      color: rgba(6, 182, 212, 0.06);
+      pointer-events: none;
+      user-select: none;
+      font-family: serif;
+    }
+
+    .sc-rx-text {
+      white-space: pre-wrap;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      color: #e2e8f0;
+      line-height: 1.55;
+      max-height: 380px;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+
+    /* Topmate CTA Banner */
+    .sc-booking-banner {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(6, 182, 212, 0.2));
+      border: 1.5px solid rgba(6, 182, 212, 0.4);
+      border-radius: 16px;
+      padding: 1.75rem;
+      text-align: center;
+      margin-top: 2rem;
+      box-shadow: 0 0 35px rgba(6, 182, 212, 0.2);
+    }
+
+    .sc-booking-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #fff;
+      margin: 0 0 0.5rem 0;
+    }
+
+    .sc-booking-sub {
+      font-size: 0.88rem;
+      color: #cbd5e1;
+      margin: 0 0 1.25rem 0;
+      line-height: 1.5;
+    }
+
+    .btn-topmate {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.65rem;
+      padding: 0.95rem 2rem;
+      background: linear-gradient(135deg, #06b6d4, #2563eb);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      border-radius: 12px;
+      text-decoration: none;
+      box-shadow: 0 10px 25px rgba(37, 99, 235, 0.4);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .btn-topmate:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 15px 30px rgba(6, 182, 212, 0.5);
+    }
+
+    .sc-action-buttons {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+      margin-top: 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    .sc-footer {
+      text-align: center;
+      padding: 2rem;
+      font-size: 0.8rem;
+      color: var(--sc-muted);
+      border-top: 1px solid var(--sc-card-border);
+      background: #050811;
+    }
+
+    @media (max-width: 640px) {
+      .sc-card { padding: 1.5rem; }
+      .sc-form-grid { grid-template-columns: 1fr; }
+      .sc-form-grid .full-col { grid-column: span 1; }
+      .sc-breakdown-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body class="scorecard-page">
+
+  <!-- Top Navigation Header -->
+  <header class="sc-header">
+    <a href="/scorecard" class="sc-brand">
+      <div class="sc-logo-icon">℞</div>
+      <div>
+        <div class="sc-brand-title" id="sc-agency-brand">The Digital Frog</div>
+        <div class="sc-brand-sub">Clinical & AI Growth Diagnostic</div>
+      </div>
+    </a>
+    <div class="sc-header-cta">
+      <a href="https://topmate.io/isurajjaiswal" id="nav-topmate-btn" target="_blank" class="btn btn-sm btn-outline">
+        <span>📅 Book with Suraj</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="sc-container">
+    
+    <!-- Progress Indicator -->
+    <div class="sc-progress-wrap" id="sc-progress-wrap">
+      <div class="sc-progress-header">
+        <span id="sc-step-label">Step 1 of 6</span>
+        <span id="sc-step-percent">16% Completed</span>
+      </div>
+      <div class="sc-progress-track">
+        <div class="sc-progress-fill" id="sc-progress-fill"></div>
+      </div>
+    </div>
+
+    <!-- Active Step Container -->
+    <div class="sc-card" id="sc-step-card">
+      <!-- Step 0: Welcome / Profile Selection -->
+      <div id="step-view">
+        <!-- Dynamically rendered by app -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="sc-footer">
+    <div>Diagnostic system developed by <strong>Suraj Jaiswal</strong> | <span id="sc-agency-footer">The Digital Frog</span></div>
+    <div style="margin-top: 0.35rem; opacity: 0.7;">Confidential Clinical & Practice Growth Assessment • Zero Public Disclosure</div>
+  </footer>
+
+  <script>
+    // State management for Scorecard
+    let questionsConfig = [];
+    let currentStepIndex = 0;
+    let userAnswers = {};
+    let configData = {
+      topmateUrl: 'https://topmate.io/isurajjaiswal',
+      agencyName: 'The Digital Frog',
+      founderName: 'Suraj Jaiswal',
+      agencyPhone: '+91 98765 43210'
+    };
+
+    const NICHE_CONFIG = {
+      medical: {
+        badge: '℞',
+        reportTitle: '℞ Clinical Practice Growth Prescription',
+        gateTitle: 'Where should we email your official ℞ Practice Audit PDF?',
+        gateSub: 'We will dispatch your confidential <strong>℞ Clinical Practice Audit & Digital Health Prescription (PDF)</strong> directly to your email, and unlock your report below.',
+        personLabel: 'Doctor / Practice Principal Full Name *',
+        personPlaceholder: 'e.g. Dr. Aryan Mehta',
+        businessLabel: 'Clinic / Practice Name *',
+        businessPlaceholder: 'e.g. DentAura Multispeciality Clinic',
+        typeLabel: 'Clinical Specialty Domain',
+        typePlaceholder: 'e.g. Dental & Implants / Dermatology / Orthopedics',
+        feeLabel: 'Standard Consultation Fee (₹ or $)',
+        feePlaceholder: 'e.g. ₹1,200 / $150',
+        timingLabel: 'Consultation Timings',
+        timingPlaceholder: 'e.g. 11 AM - 7 PM weekdays',
+        noteText: '🩺 <strong>Schedule Respect Guarantee:</strong> We recognize that doctor clinic hours are sacred for patient care. Noting your standard fee and consultation timings allows us to respect your clinical schedule for a 10-minute briefing.',
+        btnText: '🩺 Generate My ℞ Prescription & Health Score'
+      },
+      legal: {
+        badge: '⚖️',
+        reportTitle: '⚖️ Legal Practice Growth Blueprint & Client Audit',
+        gateTitle: 'Where should we email your Legal Growth Blueprint PDF?',
+        gateSub: 'We will dispatch your confidential <strong>⚖️ Legal Practice Growth Blueprint & Client Acquisition Audit (PDF)</strong> directly to your email, and unlock your report below.',
+        personLabel: 'Managing Partner / Attorney Full Name *',
+        personPlaceholder: 'e.g. Advocate Rajesh Sharma / Sarah Jenkins, Esq.',
+        businessLabel: 'Law Firm / Legal Practice Name *',
+        businessPlaceholder: 'e.g. Apex Legal Partners',
+        typeLabel: 'Legal Practice Areas',
+        typePlaceholder: 'e.g. Corporate Law / Personal Injury / Litigation',
+        feeLabel: 'Hourly Rate / Retainer Fee (₹ or $)',
+        feePlaceholder: 'e.g. ₹3,500/hr / $350/hr',
+        timingLabel: 'Court & Consultation Hours',
+        timingPlaceholder: 'e.g. 10 AM - 6 PM Mon-Fri',
+        noteText: '⚖️ <strong>Schedule Respect Guarantee:</strong> We understand your billable hours are valuable. We schedule your 10-minute AI avatar demonstration without interrupting depositions or court proceedings.',
+        btnText: '⚖️ Generate My Legal Growth Blueprint'
+      },
+      real_estate: {
+        badge: '🏡',
+        reportTitle: '🏡 Real Estate Acquisition Blueprint & Market Audit',
+        gateTitle: 'Where should we email your Real Estate Blueprint PDF?',
+        gateSub: 'We will dispatch your confidential <strong>🏡 Real Estate Acquisition Blueprint & Market Audit (PDF)</strong> directly to your email, and unlock your report below.',
+        personLabel: 'Principal Broker / Managing Realtor Full Name *',
+        personPlaceholder: 'e.g. Michael Chang / Vikram Rathore',
+        businessLabel: 'Real Estate Agency / Brokerage Name *',
+        businessPlaceholder: 'e.g. Prime Realty Group',
+        typeLabel: 'Primary Property Specialization',
+        typePlaceholder: 'e.g. Luxury Residential / Commercial / Off-Plan',
+        feeLabel: 'Average Commission / Ticket Size (₹ or $)',
+        feePlaceholder: 'e.g. 2% / $15,000 average deal',
+        timingLabel: 'Showing & Negotiation Hours',
+        timingPlaceholder: 'e.g. 10 AM - 7 PM Tue-Sun',
+        noteText: '🏡 <strong>Schedule Respect Guarantee:</strong> We know your time is spent in property walkthroughs and client negotiations.',
+        btnText: '🏡 Generate My Real Estate Blueprint'
+      },
+      beauty: {
+        badge: '✨',
+        reportTitle: '✨ Salon & Spa Revenue Acceleration Audit',
+        gateTitle: 'Where should we email your Salon & Spa Blueprint PDF?',
+        gateSub: 'We will dispatch your confidential <strong>✨ Salon & Spa Revenue Acceleration Audit (PDF)</strong> directly to your email, and unlock your report below.',
+        personLabel: 'Salon Owner / Creative Director Full Name *',
+        personPlaceholder: 'e.g. Priya Kapoor / Chloe Laurent',
+        businessLabel: 'Salon / Spa / Aesthetic Lounge Name *',
+        businessPlaceholder: 'e.g. Aura Luxury Hair Lounge & MedSpa',
+        typeLabel: 'Aesthetic / Styling Focus',
+        typePlaceholder: 'e.g. Balayage & Color / HydraFacials / Lash & Brow',
+        feeLabel: 'Average Service Ticket Value (₹ or $)',
+        feePlaceholder: 'e.g. ₹3,000 / $180',
+        timingLabel: 'Floor Operating Hours',
+        timingPlaceholder: 'e.g. 10 AM - 8 PM Tue-Sun',
+        noteText: '✨ <strong>Floor Respect Guarantee:</strong> We respect your floor appointments with VIP guests. Your 10-minute briefing is arranged before salon opening or after closing.',
+        btnText: '✨ Generate My Salon Growth Blueprint'
+      },
+      fitness: {
+        badge: '🏋️',
+        reportTitle: '🏋️ Gym Membership & Client Acquisition Blueprint',
+        gateTitle: 'Where should we email your Gym Growth Blueprint PDF?',
+        gateSub: 'We will dispatch your confidential <strong>🏋️ Gym Membership & Client Acquisition Blueprint (PDF)</strong> directly to your email, and unlock your report below.',
+        personLabel: 'Gym Founder / Head Coach Full Name *',
+        personPlaceholder: 'e.g. Coach David Miller / Amit Rawat',
+        businessLabel: 'Gym / Fitness Studio Name *',
+        businessPlaceholder: 'e.g. IronCore CrossFit & Performance Hub',
+        typeLabel: 'Training Discipline',
+        typePlaceholder: 'e.g. CrossFit / Strength & Conditioning / Pilates',
+        feeLabel: 'Monthly Membership / PT Rate (₹ or $)',
+        feePlaceholder: 'e.g. ₹4,500/mo / $150/mo',
+        timingLabel: 'Operating & Coaching Hours',
+        timingPlaceholder: 'e.g. 6 AM - 10 PM daily',
+        noteText: '🏋️ <strong>Floor Respect Guarantee:</strong> We know you are on the floor coaching athletes. We schedule between training blocks.',
+        btnText: '🏋️ Generate My Gym Growth Blueprint'
+      },
+      towing: {
+        badge: '🚗',
+        reportTitle: '🚗 24/7 Emergency Dispatch & Fleet Blueprint',
+        gateTitle: 'Where should we email your Fleet Growth Blueprint PDF?',
+        gateSub: 'We will dispatch your confidential <strong>🚗 24/7 Emergency Dispatch & Fleet Dominance Blueprint (PDF)</strong> directly to your email, and unlock your report below.',
+        personLabel: 'Fleet Owner / Operations Director Full Name *',
+        personPlaceholder: 'e.g. John Henderson / Surinder Singh',
+        businessLabel: 'Towing & Roadside Service Name *',
+        businessPlaceholder: 'e.g. Rapid Recovery Towing & Fleet Services',
+        typeLabel: 'Fleet Specialization',
+        typePlaceholder: 'e.g. Heavy Duty Towing / 24/7 Roadside / Auto Repair',
+        feeLabel: 'Average Tow / Dispatch Fee (₹ or $)',
+        feePlaceholder: 'e.g. $125 / ₹2,500 per call',
+        timingLabel: 'Dispatch Operating Hours',
+        timingPlaceholder: 'e.g. 24/7 Operations / 8 AM - 8 PM',
+        noteText: '🚗 <strong>Dispatch Respect Guarantee:</strong> We know emergency calls take immediate priority. We coordinate during your quietest dispatch window.',
+        btnText: '🚗 Generate My Fleet Growth Blueprint'
+      },
+      home_services: {
+        badge: '🛠️',
+        reportTitle: '🛠️ Contractor Growth Blueprint & Dispatch Audit',
+        gateTitle: 'Where should we email your Contractor Growth Blueprint PDF?',
+        gateSub: 'We will dispatch your confidential <strong>🛠️ Contractor Growth Blueprint & 24/7 Dispatch Audit (PDF)</strong> directly to your email, and unlock your report below.',
+        personLabel: 'Owner / Master Contractor Full Name *',
+        personPlaceholder: 'e.g. Mark Robinson / Sunil Verma',
+        businessLabel: 'Contracting Company Name *',
+        businessPlaceholder: 'e.g. ProCraft HVAC & Plumbing Solutions',
+        typeLabel: 'Primary Trade',
+        typePlaceholder: 'e.g. HVAC / Plumbing / Roofing / Electrical',
+        feeLabel: 'Average Job / Replacement Ticket (₹ or $)',
+        feePlaceholder: 'e.g. $2,500 / ₹25,000',
+        timingLabel: 'Operating & Dispatch Hours',
+        timingPlaceholder: 'e.g. 7:30 AM - 6 PM Mon-Sat',
+        noteText: '🛠️ <strong>Jobsite Respect Guarantee:</strong> We know you are quoting estimates and managing crews. Your 10-minute briefing is arranged outside jobsite hours.',
+        btnText: '🛠️ Generate My Contractor Blueprint'
+      },
+      b2b_consulting: {
+        badge: '💼',
+        reportTitle: '💼 B2B Revenue Acceleration & Founder Blueprint',
+        gateTitle: 'Where should we email your B2B Growth Blueprint PDF?',
+        gateSub: 'We will dispatch your confidential <strong>💼 B2B Revenue Acceleration & Founder Blueprint (PDF)</strong> directly to your email, and unlock your report below.',
+        personLabel: 'Founder / Managing Director Full Name *',
+        personPlaceholder: 'e.g. Neil Harrison / Ananya Gupta, CA',
+        businessLabel: 'Firm / Advisory Practice Name *',
+        businessPlaceholder: 'e.g. Apex Advisory & Financial Partners',
+        typeLabel: 'Advisory Domain',
+        typePlaceholder: 'e.g. Tax & CA / Financial Planning / Consulting',
+        feeLabel: 'Average Retainer / Project Fee (₹ or $)',
+        feePlaceholder: 'e.g. ₹50,000/mo / $3,000/mo',
+        timingLabel: 'Client Advisory Hours',
+        timingPlaceholder: 'e.g. 9:30 AM - 6:30 PM Mon-Fri',
+        noteText: '💼 <strong>Schedule Respect Guarantee:</strong> We respect your client strategy deliverables and calendar commitments.',
+        btnText: '💼 Generate My B2B Growth Blueprint'
+      },
+      hospitality: {
+        badge: '🍽️',
+        reportTitle: '🍽️ Restaurant Revenue & Guest Acquisition Blueprint',
+        gateTitle: 'Where should we email your Restaurant Revenue Blueprint PDF?',
+        gateSub: 'We will dispatch your confidential <strong>🍽️ Restaurant Revenue & Guest Acquisition Blueprint (PDF)</strong> directly to your email, and unlock your report below.',
+        personLabel: 'Restaurateur / Head Chef / GM Full Name *',
+        personPlaceholder: 'e.g. Chef Marco Silva / Rohan Deshmukh',
+        businessLabel: 'Restaurant / Cafe Name *',
+        businessPlaceholder: 'e.g. The Olive Grove Bistro & Bar',
+        typeLabel: 'Dining Concept',
+        typePlaceholder: 'e.g. Fine Dining / Artisanal Cafe / Pizzeria & Bar',
+        feeLabel: 'Average Table / Cover Spend (₹ or $)',
+        feePlaceholder: 'e.g. ₹1,800 / $65 per person',
+        timingLabel: 'Service & Prep Hours',
+        timingPlaceholder: 'e.g. 12 PM - 11 PM Tue-Sun',
+        noteText: '🍽️ <strong>Service Respect Guarantee:</strong> Kitchen prep and dinner service demand 100% focus. Briefing scheduled between meal shifts.',
+        btnText: '🍽️ Generate My Restaurant Blueprint'
+      },
+      general: {
+        badge: '📈',
+        reportTitle: '📈 Local Business Growth & Revenue Blueprint',
+        gateTitle: 'Where should we email your Business Growth Blueprint PDF?',
+        gateSub: 'We will dispatch your confidential <strong>📈 Local Business Growth & Revenue Blueprint (PDF)</strong> directly to your email, and unlock your report below.',
+        personLabel: 'Owner / Founder / Director Full Name *',
+        personPlaceholder: 'e.g. Alex Taylor / Neha Patel',
+        businessLabel: 'Business / Company Name *',
+        businessPlaceholder: 'e.g. Apex Growth Solutions',
+        typeLabel: 'Business Category / Service',
+        typePlaceholder: 'e.g. Local Retail / Specialty Service / E-Commerce',
+        feeLabel: 'Average Customer Ticket (₹ or $)',
+        feePlaceholder: 'e.g. ₹2,000 / $120',
+        timingLabel: 'Business Operating Hours',
+        timingPlaceholder: 'e.g. 9 AM - 7 PM Mon-Sat',
+        noteText: '📈 <strong>Schedule Respect Guarantee:</strong> We know your time is spent operating your business and serving clients.',
+        btnText: '📈 Generate My Growth Blueprint'
+      }
+    };
+
+    // Load questions & config on start
+    async function initScorecard() {
+      try {
+        const res = await fetch('/api/scorecard/config');
+        if (res.ok) {
+          const data = await res.json();
+          configData = { ...configData, ...data };
+          questionsConfig = data.questions || [];
+          document.getElementById('sc-agency-brand').innerText = configData.agencyName;
+          document.getElementById('sc-agency-footer').innerText = configData.agencyName;
+          document.getElementById('nav-topmate-btn').href = configData.topmateUrl;
+        }
+      } catch (err) {
+        console.warn('Failed loading remote config, using defaults:', err);
+      }
+      renderCurrentStep();
+    }
+
+    function renderCurrentStep() {
+      const container = document.getElementById('step-view');
+      const totalSteps = questionsConfig.length + 1; // questions + lead gate
+      const progressPercent = Math.round(((currentStepIndex + 1) / totalSteps) * 100);
+
+      document.getElementById('sc-step-label').innerText = `Step ${currentStepIndex + 1} of ${totalSteps}`;
+      document.getElementById('sc-step-percent').innerText = `${progressPercent}% Completed`;
+      document.getElementById('sc-progress-fill').style.width = `${progressPercent}%`;
+
+      // If still within question steps
+      if (currentStepIndex < questionsConfig.length) {
+        const q = questionsConfig[currentStepIndex];
+        const selectedVal = userAnswers[q.id];
+
+        let optionsHtml = q.options.map(opt => `
+          <div class="sc-option-item ${selectedVal === opt.id ? 'selected' : ''}" onclick="selectOption('${q.id}', '${opt.id}')">
+            <span class="sc-option-icon">${opt.icon || '🩺'}</span>
+            <div class="sc-option-text">
+              <div class="sc-option-label">${opt.label}</div>
+              ${opt.diagnosis ? `<div class="sc-option-sub">⚠️ Diagnostic Impact: ${opt.diagnosis}</div>` : ''}
+            </div>
+          </div>
+        `).join('');
+
+        container.innerHTML = `
+          <div class="sc-tag">Clinical Diagnostic Question ${currentStepIndex + 1}</div>
+          <h2 class="sc-question-title">${q.title}</h2>
+          <p class="sc-question-sub">${q.subtitle}</p>
+          <div class="sc-options">${optionsHtml}</div>
+          <div class="sc-nav-row">
+            ${currentStepIndex > 0 ? `<button class="btn btn-outline" onclick="prevStep()">← Previous</button>` : `<div></div>`}
+            <button class="btn btn-primary" id="btn-next" onclick="nextStep()" ${selectedVal ? '' : 'disabled'}>
+              Continue →
+            </button>
+          </div>
+        `;
+      } else {
+        const selectedNiche = userAnswers.business_type || 'general';
+        const cfg = NICHE_CONFIG[selectedNiche] || NICHE_CONFIG.general;
+
+        container.innerHTML = `
+          <div class="sc-tag" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3);">
+            ✓ Diagnostic Assessment Complete • PDF Report Ready
+          </div>
+          <h2 class="sc-question-title">${cfg.gateTitle}</h2>
+          <p class="sc-question-sub">
+            🔒 ${cfg.gateSub}
+          </p>
+
+          <form id="lead-gate-form" onsubmit="submitDiagnostic(event)">
+            <div class="sc-form-grid">
+              <div class="sc-input-group">
+                <label>${cfg.personLabel}</label>
+                <input type="text" id="lead-contact-person" placeholder="${cfg.personPlaceholder}" required />
+              </div>
+
+              <div class="sc-input-group">
+                <label>${cfg.businessLabel}</label>
+                <input type="text" id="lead-business-name" placeholder="${cfg.businessPlaceholder}" required />
+              </div>
+
+              <div class="sc-input-group">
+                <label>WhatsApp / Mobile Number *</label>
+                <input type="tel" id="lead-phone" placeholder="e.g. +91 98200 12345" required />
+              </div>
+
+              <div class="sc-input-group">
+                <label>Official Email Address *</label>
+                <input type="email" id="lead-email" placeholder="e.g. contact@business.com" required />
+              </div>
+
+              <div class="sc-input-group">
+                <label>Business City / Location *</label>
+                <input type="text" id="lead-city" placeholder="e.g. Mumbai / Austin / London" required />
+              </div>
+
+              <div class="sc-input-group">
+                <label>${cfg.typeLabel}</label>
+                <input type="text" id="lead-business-type" placeholder="${cfg.typePlaceholder}" />
+              </div>
+
+              <div class="sc-input-group">
+                <label>${cfg.feeLabel}</label>
+                <input type="text" id="lead-fee" placeholder="${cfg.feePlaceholder}" />
+              </div>
+
+              <div class="sc-input-group">
+                <label>${cfg.timingLabel}</label>
+                <input type="text" id="lead-timing" placeholder="${cfg.timingPlaceholder}" />
+              </div>
+            </div>
+
+            <div class="sc-clinical-note">
+              ${cfg.noteText}
+            </div>
+
+            <div class="sc-nav-row">
+              <button type="button" class="btn btn-outline" onclick="prevStep()">← Review Answers</button>
+              <button type="submit" class="btn btn-success" id="btn-submit-report" style="padding: 0.85rem 1.75rem; font-weight: 700;">
+                <span>${cfg.btnText}</span>
+              </button>
+            </div>
+          </form>
+        `;
+      }
+    }
+
+    function selectOption(qId, optId) {
+      userAnswers[qId] = optId;
+      renderCurrentStep();
+    }
+
+    function nextStep() {
+      if (currentStepIndex < questionsConfig.length) {
+        currentStepIndex++;
+        renderCurrentStep();
+      }
+    }
+
+    function prevStep() {
+      if (currentStepIndex > 0) {
+        currentStepIndex--;
+        renderCurrentStep();
+      }
+    }
+
+    // Submit Assessment
+    async function submitDiagnostic(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-submit-report');
+      btn.disabled = true;
+      btn.innerHTML = `<span>⏳ Analyzing Footprint & Synthesizing ℞ Prescription...</span>`;
+
+      const payload = {
+        contactPerson: document.getElementById('lead-contact-person').value.trim(),
+        businessName: document.getElementById('lead-business-name').value.trim(),
+        phone: document.getElementById('lead-phone').value.trim(),
+        email: document.getElementById('lead-email').value.trim(),
+        city: document.getElementById('lead-city').value.trim(),
+        businessType: document.getElementById('lead-business-type').value.trim() || 'Medical Practice',
+        consultationFee: document.getElementById('lead-fee').value.trim(),
+        workTiming: document.getElementById('lead-timing').value.trim(),
+        answers: userAnswers
+      };
+
+      try {
+        const res = await fetch('/api/scorecard/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          renderResultsView(data, payload);
+        } else {
+          alert('Error submitting diagnostic: ' + (data.error || 'Please try again.'));
+          btn.disabled = false;
+          btn.innerHTML = `<span>🩺 Generate My ℞ Prescription & Health Score</span>`;
+        }
+      } catch (err) {
+        alert('Submission failed: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = `<span>🩺 Generate My ℞ Prescription & Health Score</span>`;
+      }
+    }
+
+    // Render Final Results & ℞ Prescription with Topmate Booking CTA
+    function renderResultsView(resData, leadData) {
+      document.getElementById('sc-progress-wrap').style.display = 'none';
+      const container = document.getElementById('step-view');
+      const s = resData.scores;
+      const selectedNiche = resData.niche || userAnswers.business_type || 'general';
+      const cfg = NICHE_CONFIG[selectedNiche] || NICHE_CONFIG.general;
+      const isMed = (selectedNiche === 'medical');
+
+      // Color coding based on overall score
+      let scoreColor = '#10b981';
+      if (s.overallScore < 40) scoreColor = '#ef4444';
+      else if (s.overallScore < 65) scoreColor = '#f59e0b';
+
+      const hooksHtml = (resData.reelHooks || []).map((h, i) => `
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.65rem;">
+          <div style="font-weight: 700; color: #38bdf8; font-size: 0.85rem;">Reel #${i+1}: ${h.title}</div>
+          <div style="font-style: italic; color: #f1f5f9; font-size: 0.88rem; margin: 0.25rem 0;">"${h.hook}"</div>
+          <div style="font-size: 0.78rem; color: #94a3b8;">🎯 ${h.objective}</div>
+        </div>
+      `).join('');
+
+      container.innerHTML = `
+        <!-- PDF Delivery Alert Banner -->
+        <div style="background: rgba(16, 185, 129, 0.12); border: 1.5px solid #10b981; border-radius: 12px; padding: 1.1rem 1.35rem; margin-bottom: 1.75rem; text-align: left; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <div style="font-weight: 800; color: #34d399; font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span>✅ Official ${cfg.reportTitle} (PDF) Generated & Dispatched!</span>
+            </div>
+            <div style="color: #cbd5e1; font-size: 0.88rem; margin-top: 0.25rem;">
+              Sent to: <strong>${leadData.email || 'your official email'}</strong> • Archived in your confidential file.
+            </div>
+          </div>
+          ${resData.pdfUrl ? `
+            <a href="${resData.pdfUrl}" target="_blank" download class="btn btn-sm btn-primary" style="background: #0284c7; border: none; font-weight: 800; padding: 0.65rem 1.25rem; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);">
+              <span>📥 Download Official PDF Report</span>
+            </a>
+          ` : ''}
+        </div>
+
+        <div class="sc-results-header">
+          <div class="sc-tag" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3);">
+            Official ${cfg.reportTitle}
+          </div>
+          <h2 style="font-size: 1.85rem; font-weight: 800; color: #fff; margin: 0.5rem 0;">
+            ${leadData.contactPerson} (${leadData.businessName})
+          </h2>
+          <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">
+            ${leadData.businessType || cfg.reportTitle} • ${leadData.city}
+          </p>
+
+          <!-- Score Gauge -->
+          <div class="sc-score-gauge" style="--gauge-score: ${s.overallScore}; margin-top: 1.5rem;">
+            <div class="sc-score-inner">
+              <div class="sc-score-val" style="color: ${scoreColor};">${s.overallScore}</div>
+              <div class="sc-score-denom">/100</div>
+            </div>
+          </div>
+          <div class="sc-score-grade" style="color: ${scoreColor}; border-color: ${scoreColor}; background: ${scoreColor}22;">
+            ${s.grade.toUpperCase()} — ${s.statusSummary}
+          </div>
+        </div>
+
+        <!-- Breakdown Pillars -->
+        <div class="sc-breakdown-grid">
+          <div class="sc-subscore-box">
+            <div class="sc-subscore-val">${s.videoScore}/100</div>
+            <div class="sc-subscore-lbl">🎥 Video Authority & Reels</div>
+          </div>
+          <div class="sc-subscore-box">
+            <div class="sc-subscore-val">${s.discoveryScore}/100</div>
+            <div class="sc-subscore-lbl">📍 Local Discovery & Maps</div>
+          </div>
+          <div class="sc-subscore-box">
+            <div class="sc-subscore-val">${s.conversionScore}/100</div>
+            <div class="sc-subscore-lbl">⚡ Lead Response Speed</div>
+          </div>
+        </div>
+
+        <!-- Pad Main Container -->
+        <div class="sc-rx-pad">
+          <div class="sc-rx-watermark">${cfg.badge}</div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 0.75rem;">
+            <div>
+              <div style="font-weight: 800; color: #38bdf8; font-size: 0.95rem; letter-spacing: 0.05em;">
+                ${cfg.reportTitle.toUpperCase()}
+              </div>
+              <div style="font-size: 0.75rem; color: #94a3b8;">
+                Prepared by ${resData.founderName} | ${resData.agencyName}
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              ${resData.pdfUrl ? `<a href="${resData.pdfUrl}" target="_blank" class="btn btn-xs btn-primary">📄 View PDF</a>` : ''}
+              <button class="btn btn-xs btn-outline" onclick="copyPrescriptionText()">📋 Copy Report Text</button>
+            </div>
+          </div>
+          <pre class="sc-rx-text" id="final-rx-text">${resData.prescriptionText}</pre>
+        </div>
+
+        <!-- Specialty Viral Reel Hooks -->
+        <div style="margin: 2rem 0; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 1.25rem;">
+          <div style="font-weight: 700; color: #f8fafc; font-size: 0.98rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+            <span>🎯 3 Prescribed Viral Reel Hooks for ${leadData.businessName}</span>
+          </div>
+          ${hooksHtml}
+        </div>
+
+        <!-- TOPMATE CALENDAR BOOKING BANNER -->
+        <div class="sc-booking-banner">
+          <div class="sc-booking-title">📅 Ready to Deploy Your ${isMed ? 'Doctor' : 'Founder'} AI Avatar & Accelerate Revenue?</div>
+          <p class="sc-booking-sub">
+            Your schedule is strictly reserved for managing operations and servicing clients. Book a brief 1-on-1 AI Strategy Session with <strong>${resData.founderName}</strong> on Topmate to preview your pre-rendered voice and face clone demo.
+          </p>
+          <a href="${resData.topmateUrl}" target="_blank" class="btn-topmate">
+            <span>📅 Book 1-on-1 Growth Diagnostic on Topmate</span>
+          </a>
+          
+          <div class="sc-action-buttons">
+            ${resData.pdfUrl ? `
+              <a href="${resData.pdfUrl}" target="_blank" download class="btn btn-sm btn-outline">
+                <span>📥 Download Official PDF Report</span>
+              </a>
+            ` : ''}
+            <a href="https://wa.me/919876543210?text=${encodeURIComponent(`Hello Suraj, I completed the Growth Diagnostic for ${leadData.businessName} (Score: ${s.overallScore}/100). Would love to see the AI Avatar demo.`)}" target="_blank" class="btn btn-sm btn-success">
+              <span>💬 Chat with Suraj on WhatsApp</span>
+            </a>
+            <button class="btn btn-sm btn-outline" onclick="window.print()">
+              <span>🖨️ Print Blueprint</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function copyPrescriptionText() {
+      const text = document.getElementById('final-rx-text')?.innerText || '';
+      if (text) {
+        navigator.clipboard.writeText(text);
+        alert('Growth Report copied to clipboard!');
+      }
+    }
+
+    // Start on load
+    window.addEventListener('DOMContentLoaded', initScorecard);
+  </script>
+</body>
+</html>

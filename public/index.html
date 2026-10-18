@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anti-Gravity Social Growth & Lead Automation Engine</title>
+  <meta name="description" content="Autonomous browser-controlled multi-platform growth engine for Threads, Instagram, Facebook, and LinkedIn without APIs.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=7">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand-header">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h2>Anti-Gravity</h2>
+          <span class="badge-engine">Agentic Growth 2.0</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" id="nav-overview" onclick="switchTab('overview')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          <span>Overview & Ops</span>
+        </button>
+        <button class="nav-item" id="nav-leads" onclick="switchTab('leads')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span>Social Lead CRM</span>
+          <span class="nav-counter" id="sidebar-lead-count">0</span>
+        </button>
+        <button class="nav-item nav-item-highlight" id="nav-maps" onclick="switchTab('maps')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+          <span>Google Maps Hunter</span>
+          <span class="nav-counter nav-counter-gold" id="sidebar-maps-count">0</span>
+        </button>
+        <button class="nav-item nav-item-highlight" id="nav-scorecard" onclick="switchTab('scorecard')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <span>Scorecard Leads</span>
+          <span class="nav-counter nav-counter-gold" id="sidebar-scorecard-count" style="display: none;">0</span>
+        </button>
+        <button class="nav-item" id="nav-studio" onclick="switchTab('studio')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>
+          <span>Content Studio</span>
+        </button>
+        <button class="nav-item" id="nav-autopilot" onclick="switchTab('autopilot')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"></path><path d="M12 9V4s3.03.55 4 2c1.08 1.62 0 5 0 5"></path></svg>
+          <span>Autopilot Runner</span>
+        </button>
+        <button class="nav-item" id="nav-knowledge" onclick="switchTab('knowledge')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path><line x1="8" y1="6" x2="16" y2="6"></line><line x1="8" y1="10" x2="16" y2="10"></line></svg>
+          <span>Knowledge Engine</span>
+        </button>
+        <button class="nav-item" id="nav-accounts" onclick="switchTab('accounts')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          <span>Browser Profiles</span>
+        </button>
+        <button class="nav-item" id="nav-settings" onclick="switchTab('settings')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <span>Agent Intelligence</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="system-status-indicator">
+          <span class="status-dot pulsing"></span>
+          <div>
+            <span class="status-label">Anti-Ban Engine Active</span>
+            <small id="ws-indicator">WebSocket Connected</small>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Bar Header -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1 id="page-title">Autonomous Growth Engine</h1>
+          <div class="subtitle" id="niche-badge" title="Target Niche">
+            <span class="niche-chip">🎯 <strong>Target Niche:</strong> E-commerce, SaaS, and Digital Product Sales</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <!-- Live Public URL Status Pill -->
+          <div class="cdp-pill" id="tunnel-pill" onclick="copyScorecardPublicLink()" title="Click to copy public scorecard link for clients" style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; cursor: pointer;">
+            <span class="cdp-dot" id="tunnel-dot" style="background: #10b981; box-shadow: 0 0 8px #10b981;"></span>
+            <span id="tunnel-text">Live: Connecting...</span>
+          </div>
+
+          <!-- CDP Live Status Pill -->
+          <div class="cdp-pill" id="cdp-pill" onclick="checkCdpStatus()" title="Click to verify native Chrome CDP connection">
+            <span class="cdp-dot" id="cdp-dot"></span>
+            <span id="cdp-text">Chrome CDP :9222</span>
+          </div>
+
+          <!-- New Leads Notification Bell -->
+          <div class="header-notif-btn" id="header-notif-bell" onclick="filterToNewLeads()" title="Click to view fresh uncontacted leads in CRM">
+            <span class="notif-bell-icon">🔔</span>
+            <span class="notif-text">New Leads</span>
+            <span class="notif-badge" id="notif-lead-count">0</span>
+          </div>
+
+          <a href="/scorecard" target="_blank" class="btn btn-outline" id="btn-open-scorecard-pub" title="Open client-facing scorecard diagnostic test">
+            <span>📋 Open Public Test</span>
+          </a>
+          <button class="btn btn-secondary" onclick="copyScorecardPublicLink()" id="btn-copy-scorecard" title="Copy public link to send to doctors or prospects">
+            <span>🔗 Copy Test Link</span>
+          </button>
+          <button class="btn btn-secondary" onclick="openLoginModal()" id="btn-quick-login">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+            <span>Open Browser Login</span>
+          </button>
+          <button class="btn btn-primary" onclick="triggerLeadScan()" id="btn-run-scan">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <span>Hunt High-Intent Leads</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- TAB 1: OVERVIEW -->
+      <section id="tab-overview" class="tab-pane active">
+        <!-- KPI Metrics Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">Total Discovered Leads</span>
+              <div class="stat-icon icon-blue">🎯</div>
+            </div>
+            <div class="stat-value" id="stat-total-leads">0</div>
+            <div class="stat-footer text-success">Filtered with Gemini Reasoning</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">High-Intent Buyers (70%+)</span>
+              <div class="stat-icon icon-emerald">🔥</div>
+            </div>
+            <div class="stat-value" id="stat-high-intent">0</div>
+            <div class="stat-footer text-emerald">Ready for Outreach & Solution Pitch</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">Engaged & In Pipeline</span>
+              <div class="stat-icon icon-purple">💬</div>
+            </div>
+            <div class="stat-value" id="stat-engaged">0</div>
+            <div class="stat-footer text-purple">Contextual comments & active DMs</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">Converted / Clients</span>
+              <div class="stat-icon icon-amber">🏆</div>
+            </div>
+            <div class="stat-value" id="stat-converted">0</div>
+            <div class="stat-footer text-amber">Pipeline conversion goal</div>
+          </div>
+        </div>
+
+        <!-- Platform Channels & Daily Quota Safeguards -->
+        <div class="section-card">
+          <div class="section-header">
+            <div>
+              <h3>Multi-Platform Channels & Quota Safety Meters</h3>
+              <p>Automatic rate-limiting prevents platform shadowbans without official APIs.</p>
+            </div>
+          </div>
+          <div class="channels-grid">
+            <!-- Threads -->
+            <div class="channel-card">
+              <div class="channel-header">
+                <div class="channel-title">
+                  <span class="platform-icon threads-icon">🧵</span>
+                  <strong>Threads</strong>
+                </div>
+                <span class="status-tag status-active">Browser Ready</span>
+              </div>
+              <div class="quota-meter">
+                <div class="quota-labels">
+                  <span>Comments Today</span>
+                  <span id="quota-threads-comments">0 / 20</span>
+                </div>
+                <div class="progress-bar"><div class="progress-fill fill-blue" id="progress-threads" style="width: 0%"></div></div>
+              </div>
+              <button class="btn btn-sm btn-outline" onclick="openPlatformLogin('threads')">Open Threads Session</button>
+            </div>
+
+            <!-- LinkedIn -->
+            <div class="channel-card">
+              <div class="channel-header">
+                <div class="channel-title">
+                  <span class="platform-icon linkedin-icon">💼</span>
+                  <strong>LinkedIn</strong>
+                </div>
+                <span class="status-tag status-active">Browser Ready</span>
+              </div>
+              <div class="quota-meter">
+                <div class="quota-labels">
+                  <span>Comments Today</span>
+                  <span id="quota-linkedin-comments">0 / 20</span>
+                </div>
+                <div class="progress-bar"><div class="progress-fill fill-cyan" id="progress-linkedin" style="width: 0%"></div></div>
+              </div>
+              <button class="btn btn-sm btn-outline" onclick="openPlatformLogin('linkedin')">Open LinkedIn Session</button>
+            </div>
+
+            <!-- Facebook -->
+            <div class="channel-card">
+              <div class="channel-header">
+                <div class="channel-title">
+                  <span class="platform-icon fb-icon">👥</span>
+                  <strong>Facebook Groups</strong>
+                </div>
+                <span class="status-tag status-active">Browser Ready</span>
+              </div>
+              <div class="quota-meter">
+                <div class="quota-labels">
+                  <span>Comments Today</span>
+                  <span id="quota-facebook-comments">0 / 20</span>
+                </div>
+                <div class="progress-bar"><div class="progress-fill fill-purple" id="progress-facebook" style="width: 0%"></div></div>
+              </div>
+              <button class="btn btn-sm btn-outline" onclick="openPlatformLogin('facebook')">Open Facebook Session</button>
+            </div>
+
+            <!-- Instagram -->
+            <div class="channel-card">
+              <div class="channel-header">
+                <div class="channel-title">
+                  <span class="platform-icon insta-icon">📸</span>
+                  <strong>Instagram</strong>
+                </div>
+                <span class="status-tag status-active">Browser Ready</span>
+              </div>
+              <div class="quota-meter">
+                <div class="quota-labels">
+                  <span>DMs & Comments</span>
+                  <span id="quota-instagram-comments">0 / 20</span>
+                </div>
+                <div class="progress-bar"><div class="progress-fill fill-pink" id="progress-instagram" style="width: 0%"></div></div>
+              </div>
+              <button class="btn btn-sm btn-outline" onclick="openPlatformLogin('instagram')">Open Instagram Session</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Terminal Stream -->
+        <div class="section-card">
+          <div class="terminal-header">
+            <div class="terminal-title">
+              <div class="terminal-dots">
+                <span></span><span></span><span></span>
+              </div>
+              <span>Live Agent Operations & Reasoning Feed</span>
+            </div>
+            <button class="btn btn-sm btn-outline" onclick="clearLiveLogs()">Clear Feed</button>
+          </div>
+          <div class="terminal-window" id="live-terminal">
+            <div class="terminal-line text-muted">[System] Agent engine initialized. Persistent Chrome profile loaded.</div>
+            <div class="terminal-line text-info">[Engine] Ready to scan Threads, Instagram, Facebook, and LinkedIn for E-commerce & SaaS leads.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: LEAD HUNTER & CRM -->
+      <section id="tab-leads" class="tab-pane">
+        <!-- Live Connected Channels Status Bar -->
+        <div class="connected-channels-banner" id="connected-channels-banner">
+          <div class="banner-title">
+            <span class="status-indicator-green"></span>
+            <strong>Active Search Channels:</strong>
+            <small class="text-dim">(Lead search only operates on channels confirmed connected)</small>
+          </div>
+          <div class="channel-pills" id="channel-pills">
+            <span class="channel-pill pill-active" id="pill-threads" title="Threads session active">🧵 Threads <small class="pill-status">🟢 Connected</small></span>
+            <span class="channel-pill pill-active" id="pill-instagram" title="Instagram session active">📸 Instagram <small class="pill-status">🟢 Connected</small></span>
+            <span class="channel-pill pill-inactive" id="pill-facebook" title="Click to connect in Browser Profiles" onclick="switchTab('accounts')">👥 Facebook <small class="pill-status">⚪ Disconnected</small></span>
+            <span class="channel-pill pill-inactive" id="pill-linkedin" title="Click to connect in Browser Profiles" onclick="switchTab('accounts')">💼 LinkedIn <small class="pill-status">⚪ Disconnected</small></span>
+          </div>
+          <div class="banner-actions">
+            <button class="btn btn-xs btn-outline" onclick="checkPlatformStatuses(true)" title="Force live verification of account logins">↻ Recheck Status</button>
+            <button class="btn btn-xs btn-outline" onclick="switchTab('accounts')" title="Manage and log into browser accounts">Manage Logins ⚙️</button>
+          </div>
+        </div>
+
+        <!-- Search Strategy & Dynamic Query Manager -->
+        <div class="lead-keywords-bar" id="lead-keywords-bar">
+          <div class="kw-bar-top">
+            <div class="kw-header-left">
+              <span class="kw-icon">🎯</span>
+              <div class="kw-header-text">
+                <strong>Active Search Queries (<span id="kw-active-count">0</span> queries loaded)</strong>
+                <span class="kw-subtext">Keywords scanned across your connected social platforms</span>
+              </div>
+            </div>
+            <div class="kw-header-right">
+              <div class="kw-topic-box">
+                <input type="text" id="kw-quick-topic" placeholder="Focus topic (e.g. meta ads, shopify, SEO)..." class="kw-topic-input">
+                <button class="btn btn-sm btn-primary" onclick="expandKeywordsWithAI()" id="btn-expand-kw" title="AI generates 15 high-intent queries for this topic">
+                  <span>✨ Auto-Expand (AI)</span>
+                </button>
+              </div>
+              <button class="btn btn-sm btn-secondary" onclick="openKeywordsModal()" id="btn-manage-kw">
+                <span>Manage Queries (<span id="kw-count-badge">0</span>) ⚙️</span>
+              </button>
+            </div>
+          </div>
+          <div class="keywords-chips-preview" id="keywords-chips-preview">
+            <!-- Keyword chips rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- CRM Pipeline Stage Tracker -->
+        <div class="crm-pipeline-bar" id="crm-pipeline-bar">
+          <button class="stage-tab active" data-stage="all" onclick="setPipelineStage('all')">
+            <span class="stage-icon">📁</span>
+            <span class="stage-title">All Inquiries</span>
+            <span class="stage-count" id="count-stage-all">0</span>
+          </button>
+          <button class="stage-tab stage-tab-new" data-stage="discovered" onclick="setPipelineStage('discovered')">
+            <span class="stage-icon">✨</span>
+            <span class="stage-title">New Leads</span>
+            <span class="stage-count badge-new-counter" id="count-stage-new">0</span>
+          </button>
+          <button class="stage-tab" data-stage="engaged" onclick="setPipelineStage('engaged')">
+            <span class="stage-icon">💬</span>
+            <span class="stage-title">Reached Out</span>
+            <span class="stage-count" id="count-stage-engaged">0</span>
+          </button>
+          <button class="stage-tab" data-stage="dm_sent" onclick="setPipelineStage('dm_sent')">
+            <span class="stage-icon">✉️</span>
+            <span class="stage-title">DM Sent</span>
+            <span class="stage-count" id="count-stage-dm">0</span>
+          </button>
+          <button class="stage-tab" data-stage="converted" onclick="setPipelineStage('converted')">
+            <span class="stage-icon">🏆</span>
+            <span class="stage-title">Converted</span>
+            <span class="stage-count" id="count-stage-converted">0</span>
+          </button>
+          <button class="stage-tab" data-stage="quality" onclick="setPipelineStage('quality')">
+            <span class="stage-icon">⭐</span>
+            <span class="stage-title">Quality Verified</span>
+            <span class="stage-count" id="count-stage-quality">0</span>
+          </button>
+        </div>
+
+        <!-- Filter & Sorting Controls Toolbar -->
+        <div class="leads-toolbar">
+          <div class="toolbar-filters">
+            <select id="filter-platform" onchange="filterLeads()" title="Filter by channel">
+              <option value="connected" selected>🟢 Connected Channels Only</option>
+              <option value="all">📁 All Channels (Inc. Disconnected)</option>
+              <option value="threads">🧵 Threads (Connected)</option>
+              <option value="instagram">📸 Instagram (Connected)</option>
+              <option value="facebook">👥 Facebook (Connected)</option>
+              <option value="linkedin">💼 LinkedIn (Disconnected)</option>
+            </select>
+            <select id="filter-sort" onchange="sortAndFilterLeads()" title="Order CRM leads">
+              <option value="newest" selected>⚡ Sort: Newest First</option>
+              <option value="intent">🔥 Sort: Highest Intent Score</option>
+              <option value="freshness">⏱️ Sort: Post Published Date</option>
+              <option value="status">📊 Sort: Pipeline Stage</option>
+            </select>
+            <select id="filter-intent" onchange="filterLeads()" title="Filter by buying intent">
+              <option value="all">All Intent Scores</option>
+              <option value="high">High Intent (70%+)</option>
+              <option value="medium">Medium Intent (45% - 69%)</option>
+            </select>
+            <select id="filter-age" onchange="loadLeads()" title="Filter by post publication age">
+              <option value="7" selected>⚡ Fresh Enquiries (<= 7 Days Old)</option>
+              <option value="3">🔥 Very Recent (<= 3 Days Old)</option>
+              <option value="1">⏱️ Last 24 Hours (<= 1 Day Old)</option>
+              <option value="all">📁 All Leads (Include Dead / > 7d)</option>
+            </select>
+            <select id="filter-quality" onchange="filterLeads()" title="Filter by user rating">
+              <option value="all">⭐ All Quality Ratings</option>
+              <option value="correct">👍 Correct Leads (Verified)</option>
+              <option value="unreviewed">⏳ Unreviewed Leads</option>
+              <option value="incorrect">👎 Disqualified / Not a Lead</option>
+            </select>
+            <select id="filter-verified" onchange="filterLeads()" title="Filter by URL / profile verification status">
+              <option value="all">🛡️ All Verification Statuses</option>
+              <option value="verified" selected>✅ Verified Live Leads Only</option>
+              <option value="unverified">⏳ Unverified / Pending Check</option>
+            </select>
+          </div>
+          <div class="toolbar-actions">
+            <!-- View Mode Switcher -->
+            <div class="view-mode-selector">
+              <button class="view-btn active" id="btn-view-cards" onclick="setLeadView('cards')" title="Card View">
+                🗂️ Cards
+              </button>
+              <button class="view-btn" id="btn-view-table" onclick="setLeadView('table')" title="Table View">
+                📋 Table
+              </button>
+            </div>
+            <button class="btn btn-outline-emerald" onclick="verifyAllSocialLeads()" id="btn-verify-leads" title="Run instant live verification check to confirm 100% active profiles and purge 404s/deleted accounts">
+              🛡️ <span>Verify All Leads</span>
+            </button>
+            <button class="btn btn-secondary" onclick="loadLeads()">Refresh</button>
+            <button class="btn btn-primary" onclick="triggerLeadScan()" id="btn-scan-connected">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <span>Scan Connected Channels</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- CRM Leads Display Area (Cards or Table) -->
+        <div class="leads-container" id="leads-list">
+          <div class="empty-state">
+            <div class="empty-icon">🎯</div>
+            <h3>Loading leads pipeline...</h3>
+            <p>Fetching opportunities from your connected social channels.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: GOOGLE MAPS LOCAL LEAD HUNTER -->
+      <section id="tab-maps" class="tab-pane">
+        <!-- Search Header Bar -->
+        <div class="maps-hunter-header section-card">
+          <div class="maps-title-row">
+            <div class="maps-header-left">
+              <div class="maps-badge-icon">📍</div>
+              <div>
+                <h2>Google Maps Local Business Lead Hunter</h2>
+                <p class="text-muted">Target local businesses with Google Maps listings, extract verified direct phone numbers, and filter by <strong>NO WEBSITE</strong> for high-ticket AI website development, Local SEO, and Geo-marketing.</p>
+              </div>
+            </div>
+            <div class="maps-header-right">
+              <button class="btn btn-secondary" onclick="exportMapsCsv()" title="Export all Google Maps leads to CSV">
+                📥 <span>Export CSV</span>
+              </button>
+              <button class="btn btn-primary" onclick="triggerMapsScan()" id="btn-maps-scan">
+                🚀 <span>Hunt Google Maps Leads</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Search Controls Grid -->
+          <div class="maps-search-grid">
+            <div class="form-group">
+              <label for="maps-query">Business Category / Niche</label>
+              <div class="input-with-clear">
+                <input type="text" id="maps-query" placeholder="e.g. Plumbers, Dentists, Roofers, Restaurants, Salons, HVAC..." value="Plumbers">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="maps-location">Target City & Location</label>
+              <div class="input-with-clear">
+                <input type="text" id="maps-location" placeholder="e.g. Austin, TX | Miami, FL | Chicago, IL | London, UK..." value="Austin, TX">
+              </div>
+            </div>
+
+            <div class="form-group maps-limit-group">
+              <label for="maps-limit">Lead Limit: <strong id="maps-limit-val">20</strong></label>
+              <input type="range" id="maps-limit" min="5" max="50" step="5" value="20" oninput="document.getElementById('maps-limit-val').textContent = this.value">
+            </div>
+
+            <div class="form-group maps-toggle-group">
+              <label class="toggle-container" title="Filter exclusively for businesses with NO website linked on Google Maps">
+                <input type="checkbox" id="maps-no-website-toggle" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">🔥 <strong>No Website Only</strong> (AI Web Dev Prospect)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Quick Niche Suggestion Pills -->
+          <div class="maps-niche-pills">
+            <span class="pills-label">⚡ High-Converting Local Niches:</span>
+            <button class="niche-pill" onclick="setMapsNiche('Plumbers')">🔧 Plumbers</button>
+            <button class="niche-pill" onclick="setMapsNiche('Roofing Contractors')">🏠 Roofers</button>
+            <button class="niche-pill" onclick="setMapsNiche('Dentists')">🦷 Dentists</button>
+            <button class="niche-pill" onclick="setMapsNiche('HVAC & AC Repair')">❄️ HVAC</button>
+            <button class="niche-pill" onclick="setMapsNiche('Hair Salons & Spas')">💇 Salons & Spas</button>
+            <button class="niche-pill" onclick="setMapsNiche('Restaurants & Food Trucks')">🍔 Restaurants</button>
+            <button class="niche-pill" onclick="setMapsNiche('Auto Repair Shops')">🚗 Auto Repair</button>
+            <button class="niche-pill" onclick="setMapsNiche('Electricians')">⚡ Electricians</button>
+            <button class="niche-pill" onclick="setMapsNiche('Landscaping & Tree Service')">🌿 Landscapers</button>
+          </div>
+        </div>
+
+        <!-- Maps KPI Metrics Row -->
+        <div class="stats-grid maps-stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));">
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">Verified Contactable Leads</span>
+              <div class="stat-icon icon-blue">📍</div>
+            </div>
+            <div class="stat-value" id="maps-stat-total">0</div>
+            <div class="stat-footer text-muted">Ready to Pitch</div>
+          </div>
+
+          <div class="stat-card highlight-gold-card">
+            <div class="stat-header">
+              <span class="stat-title">🔥 Verified No Website</span>
+              <div class="stat-icon icon-gold">⚡</div>
+            </div>
+            <div class="stat-value text-gold" id="maps-stat-no-website">0</div>
+            <div class="stat-footer text-gold"><strong>AI Web Dev Offer</strong></div>
+          </div>
+
+          <div class="stat-card highlight-cyan-card">
+            <div class="stat-header">
+              <span class="stat-title">🩺 Doctors & Clinics</span>
+              <div class="stat-icon icon-cyan">℞</div>
+            </div>
+            <div class="stat-value text-cyan" id="maps-stat-medical">0</div>
+            <div class="stat-footer text-cyan"><strong>AI Avatar & Reels Pitch</strong></div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">Direct Phone / WhatsApp</span>
+              <div class="stat-icon icon-emerald">📞</div>
+            </div>
+            <div class="stat-value" id="maps-stat-phones">0</div>
+            <div class="stat-footer text-emerald">1-Click Call & WhatsApp</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-title">Direct Email Discovered</span>
+              <div class="stat-icon icon-purple">✉️</div>
+            </div>
+            <div class="stat-value" id="maps-stat-emails">0</div>
+            <div class="stat-footer text-purple">Cold Email Pitch Ready</div>
+          </div>
+        </div>
+
+        <!-- Filter & Action Bar -->
+        <div class="maps-filter-bar section-card">
+          <div class="maps-filters-left">
+            <select id="maps-filter-website" onchange="loadMapsLeads()">
+              <option value="all" selected>🌐 All Categories & Targets</option>
+              <option value="medical">🩺 Doctors & Dental Clinics (AI Avatar Rx)</option>
+              <option value="false">🔥 Verified: No Website (Web Dev Pitch)</option>
+              <option value="true">✅ Verified: Has Website (SEO & AI Pitch)</option>
+            </select>
+            <select id="maps-filter-contact" onchange="loadMapsLeads()">
+              <option value="all" selected>📞 All Contactable Leads</option>
+              <option value="phone">📱 With Phone / WhatsApp</option>
+              <option value="email">✉️ With Direct Email</option>
+            </select>
+            <select id="maps-filter-status" onchange="loadMapsLeads()">
+              <option value="all" selected>📊 All Pipeline Statuses</option>
+              <option value="discovered">✨ New / Discovered</option>
+              <option value="contacted">📞 Contacted</option>
+              <option value="interested">🎯 Interested</option>
+              <option value="closed">🏆 Closed Client</option>
+            </select>
+            <input type="text" id="maps-search-input" placeholder="🔍 Search business name, city, phone, email..." oninput="debounceMapsSearch()" class="maps-search-box">
+          </div>
+          <div class="maps-filters-right">
+            <span class="maps-results-counter" id="maps-results-count">0 leads found</span>
+            <button class="btn btn-sm btn-outline-call" id="btn-maps-reverify-all" onclick="triggerBatchReverify()" title="Deep scan all existing leads to verify websites and hunt missing phone/email contact details">⚡ Re-Verify All Leads</button>
+            <button class="btn btn-sm btn-outline" onclick="loadMapsLeads()">↻ Refresh</button>
+          </div>
+        </div>
+
+        <!-- Google Maps Leads Cards Grid -->
+        <div class="maps-leads-grid" id="maps-leads-container">
+          <div class="empty-state">
+            <div class="empty-icon">📍</div>
+            <h3>No Google Maps leads yet</h3>
+            <p>Select a category and location above, then click <strong>"Hunt Google Maps Leads"</strong> to find high-ticket local prospects.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: INBOUND SCORECARD LEADS -->
+      <section id="tab-scorecard" class="tab-pane">
+        <div class="section-card scorecard-hunter-header">
+          <div class="maps-title-row">
+            <div class="maps-header-left">
+              <div class="maps-badge-icon" style="background: linear-gradient(135deg, #06b6d4, #3b82f6); color: #fff;">📋</div>
+              <div>
+                <h2>Inbound Digital Health Scorecard Leads</h2>
+                <p class="text-muted">High-intent doctors, dentists, and business owners who completed your <strong>2-minute diagnostic test</strong>, unlocked their <strong>℞ Clinical Growth Prescription</strong>, and submitted their contact details, fee & timings.</p>
+              </div>
+            </div>
+            <div class="maps-header-right" style="display: flex; gap: 0.65rem; flex-wrap: wrap;">
+              <a href="/scorecard" target="_blank" class="btn btn-primary" id="btn-open-sc-page">
+                <span>🚀 Open Public Test Page</span>
+              </a>
+              <button class="btn btn-outline" onclick="copyScorecardPublicLink()">
+                <span>🔗 Copy Shareable Link</span>
+              </button>
+              <button class="btn btn-outline" onclick="loadScorecardLeads()">
+                <span>↻ Refresh Submissions</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- KPI Metric Cards -->
+          <div class="maps-stats-grid" style="margin-top: 1.5rem;">
+            <div class="stat-card" style="border-left: 3px solid #3b82f6;">
+              <div class="stat-label">Total Tests Taken</div>
+              <div class="stat-val" id="sc-stat-total">0</div>
+              <div class="stat-sub">Inbound completed assessments</div>
+            </div>
+            <div class="stat-card" style="border-left: 3px solid #ef4444;">
+              <div class="stat-label">Critical Video Deficits</div>
+              <div class="stat-val text-danger" id="sc-stat-urgent">0</div>
+              <div class="stat-sub">Score &lt; 40 (Immediate AI Avatar Need)</div>
+            </div>
+            <div class="stat-card" style="border-left: 3px solid #f59e0b;">
+              <div class="stat-label">Average Digital Score</div>
+              <div class="stat-val" id="sc-stat-avg">0/100</div>
+              <div class="stat-sub">Clinical footprint baseline</div>
+            </div>
+            <div class="stat-card" style="border-left: 3px solid #10b981;">
+              <div class="stat-label">Consultations Booked</div>
+              <div class="stat-val text-success" id="sc-stat-booked">0</div>
+              <div class="stat-sub">Topmate or WhatsApp meetings</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter & Search Bar -->
+        <div class="maps-controls-bar">
+          <div class="maps-filter-left">
+            <span class="control-label">Filter Submissions:</span>
+            <select id="sc-filter-status" class="filter-select" onchange="loadScorecardLeads()">
+              <option value="all">All Inbound Tests</option>
+              <option value="new" selected>🔥 New Uncontacted</option>
+              <option value="contacted">💬 Follow-up Sent</option>
+              <option value="meeting_booked">📅 Topmate Meeting Booked</option>
+              <option value="converted">🏆 Converted Client</option>
+            </select>
+
+            <select id="sc-filter-sort" class="filter-select" onchange="loadScorecardLeads()">
+              <option value="newest" selected>Newest First</option>
+              <option value="score_asc">Lowest Score First (Most Urgent)</option>
+              <option value="score_desc">Highest Score First</option>
+            </select>
+          </div>
+
+          <div class="maps-filter-right">
+            <input type="text" id="sc-search-input" class="search-input" placeholder="Search doctor, practice, city..." onkeyup="filterScorecardCardsLocally()" />
+            <button class="btn btn-sm btn-outline" onclick="loadScorecardLeads()">↻ Refresh</button>
+          </div>
+        </div>
+
+        <!-- Leads Grid Container -->
+        <div class="maps-leads-grid" id="scorecard-leads-container">
+          <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <h3>Loading Inbound Scorecard Leads...</h3>
+            <p>Fetching doctor diagnostic submissions from the database.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: CONTENT STUDIO -->
+      <section id="tab-studio" class="tab-pane">
+        <div class="studio-grid">
+          <div class="section-card studio-form">
+            <div class="section-header">
+              <h3>Autonomous Social Post Generator</h3>
+              <p>AI generates platform-native viral hooks, actionable insights, and aesthetic image generation prompts.</p>
+            </div>
+
+            <div class="form-group">
+              <label for="post-platform">Publishing Platform</label>
+              <select id="post-platform">
+                <option value="linkedin">LinkedIn (B2B Authority Post)</option>
+                <option value="threads">Threads (Viral Conversational Thread)</option>
+                <option value="facebook">Facebook (Discussion & Case Study)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="post-topic">Topic or Angle (Optional)</label>
+              <input type="text" id="post-topic" placeholder="e.g. 3 hidden checkout leaks losing e-commerce stores $50k/mo">
+            </div>
+
+            <button class="btn btn-primary btn-full" onclick="generateSocialPost()" id="btn-gen-content">
+              <span>✨ Generate High-Converting Post & Visual Concept</span>
+            </button>
+
+            <div class="form-group" style="margin-top: 1.5rem;">
+              <label for="post-content">Generated Post Copy</label>
+              <textarea id="post-content" rows="9" placeholder="Generated post copy will appear here..."></textarea>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn-success btn-full" onclick="publishSocialPost()" id="btn-publish-post">
+                <span>🚀 Publish Now via Browser Control</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="section-card studio-preview">
+            <div class="section-header">
+              <h3>Visual Creative Concept & Asset</h3>
+              <p>Generated image prompt designed for accompanying graphic.</p>
+            </div>
+            <div class="image-prompt-box">
+              <label>AI Visual Generation Prompt:</label>
+              <p id="image-prompt-text" class="text-prompt">Generate a post to view the suggested visual asset prompt...</p>
+            </div>
+            <div class="hashtags-box">
+              <label>Recommended Tags:</label>
+              <div id="hashtags-list" class="tags-container">
+                <span class="tag">#Ecommerce</span>
+                <span class="tag">#SaaS</span>
+                <span class="tag">#Automation</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: BROWSER PROFILES -->
+      <section id="tab-accounts" class="tab-pane">
+        <div class="section-card">
+          <div class="section-header">
+            <h3>Persistent Browser Sessions (Zero Official API Required)</h3>
+            <p>Your Chrome sessions, cookies, and tokens are stored in <code>./user_data/chrome_profile</code>. Log in once through the browser window below, and the agent will reuse your authenticated session forever.</p>
+          </div>
+
+          <div class="platform-login-grid">
+            <!-- Threads -->
+            <div class="login-card">
+              <div class="platform-icon threads-icon">🧵</div>
+              <h4>Threads Session</h4>
+              <p>Log in to automate finding buyer discussions and publishing updates.</p>
+              <button class="btn btn-primary btn-full" onclick="openPlatformLogin('threads')">Open Threads Login Window</button>
+            </div>
+
+            <!-- LinkedIn -->
+            <div class="login-card">
+              <div class="platform-icon linkedin-icon">💼</div>
+              <h4>LinkedIn Session</h4>
+              <p>Log in to hunt high-ticket B2B leads, post updates, and engage decision makers.</p>
+              <button class="btn btn-primary btn-full" onclick="openPlatformLogin('linkedin')">Open LinkedIn Login Window</button>
+            </div>
+
+            <!-- Facebook -->
+            <div class="login-card">
+              <div class="platform-icon fb-icon">👥</div>
+              <h4>Facebook Session</h4>
+              <p>Log in to monitor niche groups and search posts asking for recommendations.</p>
+              <button class="btn btn-primary btn-full" onclick="openPlatformLogin('facebook')">Open Facebook Login Window</button>
+            </div>
+
+            <!-- Instagram -->
+            <div class="login-card">
+              <div class="platform-icon insta-icon">📸</div>
+              <h4>Instagram Session</h4>
+              <p>Log in to scan hashtags, engage leads, and nurture via 1-on-1 DMs.</p>
+              <button class="btn btn-primary btn-full" onclick="openPlatformLogin('instagram')">Open Instagram Login Window</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: AGENT INTELLIGENCE & SETTINGS -->
+      <section id="tab-settings" class="tab-pane">
+        <div class="section-card">
+          <div class="section-header">
+            <h3>Agent Reasoning & Anti-Ban Safeguards</h3>
+            <p>Customize the target industry, search keywords, and safety limits.</p>
+          </div>
+
+          <form id="settings-form" onsubmit="saveSettings(event)">
+            <div class="form-group">
+              <label for="setting-niche">Target Industry & Value Proposition</label>
+              <input type="text" id="setting-niche" value="E-commerce, SaaS, and Digital Product Sales">
+              <small class="form-hint">The AI uses this to evaluate whether a post is a buyer seeking your specific services.</small>
+            </div>
+
+            <div class="form-group">
+              <label for="setting-api-key">Gemini API Key (Optional)</label>
+              <input type="password" id="setting-api-key" placeholder="AIzaSy... (Leave empty to use built-in heuristic reasoning)">
+              <small class="form-hint">Power reasoning with Gemini 2.5 Flash. If blank, built-in heuristic intelligence will run automatically.</small>
+            </div>
+
+            <div class="form-group">
+              <label for="setting-keywords">Search Keywords (JSON Array)</label>
+              <textarea id="setting-keywords" rows="5"></textarea>
+              <small class="form-hint">Queries executed to uncover posts where users ask for recommendations or help.</small>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="setting-max-comments">Max Comments Per Platform / Day</label>
+                <input type="number" id="setting-max-comments" value="20" min="5" max="40">
+              </div>
+              <div class="form-group">
+                <label for="setting-max-dms">Max DMs Per Platform / Day</label>
+                <input type="number" id="setting-max-dms" value="10" min="2" max="25">
+              </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="setting-public-url">🌐 Public Live URL / Custom Domain</label>
+                <div style="display:flex; gap:8px;">
+                  <input type="text" id="setting-public-url" value="https://crm.gothedigitalfrog.com" placeholder="https://crm.gothedigitalfrog.com">
+                  <button type="button" class="btn btn-secondary" onclick="restartTunnel()" title="Restart Live Tunnel">🔄 Refresh</button>
+                </div>
+                <small class="form-hint">Branded domain (<strong>crm.gothedigitalfrog.com</strong>) used across all WhatsApp messages, cold emails, and receptionist pitch links.</small>
+              </div>
+              <div class="form-group">
+                <label for="setting-topmate-url">📅 Topmate Meeting Booking URL</label>
+                <input type="text" id="setting-topmate-url" value="https://topmate.io/isurajjaiswal">
+                <small class="form-hint">Calendar booking link injected into official ℞ PDFs and outreach messages.</small>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="setting-tunnel-token">🔑 Cloudflare Named Tunnel Token (Optional)</label>
+              <input type="password" id="setting-tunnel-token" placeholder="eyJhIjoi... (From Cloudflare Zero Trust > Networks > Tunnels)">
+              <small class="form-hint">If provided, the engine runs a dedicated named tunnel binding <code>crm.gothedigitalfrog.com</code> directly to your laptop with zero IP configuration.</small>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- TAB 6: AUTOPILOT RUNNER (META-AUTOMATION ENGINE) -->
+      <section id="tab-autopilot" class="tab-pane">
+        <div class="panel-card mb-4">
+          <div class="panel-header">
+            <div>
+              <h2>Meta-Automation Autopilot Control Deck</h2>
+              <p class="subtitle">Direct browser CDP control, Antigravity AI reasoning, and multi-platform autonomous execution.</p>
+            </div>
+            <div class="engine-badge-group">
+              <span class="engine-status-tag" id="engine-live-tag">Engine Ready</span>
+              <span class="engine-status-tag cdp-tag" id="engine-cdp-tag">CDP Checking...</span>
+            </div>
+          </div>
+
+          <!-- Execution Cards Grid -->
+          <div class="autopilot-grid">
+            <!-- Card 1: Browser CDP -->
+            <div class="autopilot-card">
+              <div class="card-top">
+                <div class="card-icon c-blue">🌐</div>
+                <div class="card-title-group">
+                  <h3>Native Chrome CDP</h3>
+                  <p>Port 9222 live debugging connection</p>
+                </div>
+              </div>
+              <p class="card-desc">Operates in your real personal browser with active logins and zero API keys needed.</p>
+              <div class="card-actions">
+                <button class="btn btn-secondary w-full" onclick="launchCdpBrowser()">Launch Chrome on Port 9222</button>
+                <button class="btn btn-outline w-full" onclick="checkCdpStatus()">Verify Connection</button>
+              </div>
+            </div>
+
+            <!-- Card 2: Threads Feed Scanner -->
+            <div class="autopilot-card">
+              <div class="card-top">
+                <div class="card-icon c-purple">🧵</div>
+                <div class="card-title-group">
+                  <h3>Threads Feed Scan</h3>
+                  <p>threads-agent.js scan</p>
+                </div>
+              </div>
+              <p class="card-desc">Captures live discussions, questions, and pain points directly from Threads feed.</p>
+              <div class="card-input-row">
+                <label>Limit:</label>
+                <input type="number" id="scan-limit" value="15" min="5" max="100">
+              </div>
+              <div class="card-actions">
+                <button class="btn btn-primary w-full" onclick="runEngineScan()">Run Threads Scan</button>
+              </div>
+            </div>
+
+            <!-- Card 3: AI Semantic Analyzer -->
+            <div class="autopilot-card">
+              <div class="card-top">
+                <div class="card-icon c-emerald">🧠</div>
+                <div class="card-title-group">
+                  <h3>AI Lead Analysis</h3>
+                  <p>threads-agent.js analyze</p>
+                </div>
+              </div>
+              <p class="card-desc">Evaluates intent, filters spam/recruiters, and synthesizes grounded comments.</p>
+              <div class="card-actions">
+                <button class="btn btn-emerald w-full" onclick="runEngineAnalyze()">Run Semantic Analysis</button>
+              </div>
+            </div>
+
+            <!-- Card 4: Social Autopilot -->
+            <div class="autopilot-card">
+              <div class="card-top">
+                <div class="card-icon c-amber">🚀</div>
+                <div class="card-title-group">
+                  <h3>Social Autopilot</h3>
+                  <p>agentic-social.js (Multi-Platform)</p>
+                </div>
+              </div>
+              <p class="card-desc">Full autonomous cycle across Threads, LinkedIn, and Facebook with safety guards.</p>
+              <div class="card-actions">
+                <button class="btn btn-amber w-full" onclick="runSocialAutopilot()">Launch Social Autopilot</button>
+              </div>
+            </div>
+
+            <!-- Card 5: Job Revenue Engine -->
+            <div class="autopilot-card">
+              <div class="card-top">
+                <div class="card-icon c-pink">💼</div>
+                <div class="card-title-group">
+                  <h3>Job Revenue Engine</h3>
+                  <p>job-agent.js (Freelancer / Upwork)</p>
+                </div>
+              </div>
+              <p class="card-desc">Scans high-budget software and AI automation projects and drafts customized proposals.</p>
+              <div class="card-actions">
+                <button class="btn btn-pink w-full" onclick="runJobAutopilot()">Launch Job Autopilot</button>
+              </div>
+            </div>
+
+            <!-- Card 6: Emergency Stop & Sync -->
+            <div class="autopilot-card danger-card">
+              <div class="card-top">
+                <div class="card-icon c-danger">🛑</div>
+                <div class="card-title-group">
+                  <h3>Process Control</h3>
+                  <p>Active Task Manager</p>
+                </div>
+              </div>
+              <p class="card-desc">Instantly terminate running background agents or force-sync state to SQLite.</p>
+              <div class="card-actions">
+                <button class="btn btn-danger w-full" onclick="stopEngineTask()">Emergency Stop</button>
+                <button class="btn btn-secondary w-full" onclick="syncEngineState()">Force State Sync to CRM</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Terminal Output -->
+        <div class="terminal-card">
+          <div class="terminal-header">
+            <div class="terminal-dots">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+            <div class="terminal-title">Live Engine Event Stream</div>
+            <button class="btn btn-xs btn-outline" onclick="clearTerminal()">Clear Console</button>
+          </div>
+          <div class="terminal-body" id="autopilot-terminal">
+            <div class="terminal-line text-dim">Engine terminal ready. Run any task above to stream live execution logs.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 7: KNOWLEDGE ENGINE (BRAIN & SOURCE OF TRUTH) -->
+      <section id="tab-knowledge" class="tab-pane">
+        <div class="panel-card mb-4">
+          <div class="panel-header">
+            <div>
+              <h2>Knowledge Engine & Grounding Source of Truth</h2>
+              <p class="subtitle">The structured identity, business capabilities, lead qualification rules, and communication boundaries.</p>
+            </div>
+            <div>
+              <button class="btn btn-primary" onclick="saveActiveKnowledgeFile()">Save Changes</button>
+            </div>
+          </div>
+
+          <div class="knowledge-container">
+            <!-- Sidebar list of files -->
+            <div class="knowledge-file-list" id="knowledge-file-list">
+              <div class="text-dim p-4">Loading knowledge files...</div>
+            </div>
+
+            <!-- Editor Pane -->
+            <div class="knowledge-editor-pane">
+              <div class="editor-header">
+                <div class="editor-filename" id="editor-active-filename">founder.md</div>
+                <div class="editor-meta" id="editor-meta-info">Markdown Rule Document</div>
+              </div>
+              <textarea id="knowledge-content-editor" class="knowledge-textarea" spellcheck="false" placeholder="Select a knowledge rule file from the list..."></textarea>
+              <div class="editor-footer">
+                <span id="knowledge-status-text" class="text-dim">Ready</span>
+                <button class="btn btn-sm btn-primary" onclick="saveActiveKnowledgeFile()">Save & Apply Rules</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal for Reviewing and Editing AI Comment / DM before manual dispatch -->
+  <div class="modal-overlay" id="action-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modal-title">Engage Lead</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="modal-lead-info" class="modal-meta"></p>
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
+            <label id="modal-field-label" style="margin-bottom: 0; font-weight: 600;">AI-Synthesized Comment (Editable)</label>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span id="modal-word-badge" style="font-size: 0.72rem; color: #10b981; font-weight: 500; background: rgba(16, 185, 129, 0.12); padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.25);">26 words • Short & Crisp ✨</span>
+              <button type="button" id="modal-regen-btn" class="btn btn-xs btn-outline" onclick="regenerateModalActionText()" title="Generate another high-converting variant" style="padding: 2px 8px; font-size: 0.72rem; display: flex; align-items: center; gap: 4px;">
+                <span>✨</span> Regenerate Shorter
+              </button>
+            </div>
+          </div>
+          <textarea id="modal-text" rows="4" style="resize: vertical; font-size: 0.88rem; line-height: 1.55; padding: 0.65rem 0.8rem; border-radius: 8px;" oninput="updateModalWordCount()"></textarea>
+          
+          <div id="modal-angle-bar" style="display: flex; gap: 6px; margin-top: 8px; align-items: center; flex-wrap: wrap;">
+            <span style="font-size: 0.72rem; color: var(--text-dim);">Quick Angles:</span>
+            <button type="button" class="tag-chip" onclick="applyCommentAngle('hook')" style="cursor: pointer; font-size: 0.72rem; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: rgba(255,255,255,0.04); color: var(--text-color);">🎯 Creative / Target Hook</button>
+            <button type="button" class="tag-chip" onclick="applyCommentAngle('insight')" style="cursor: pointer; font-size: 0.72rem; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: rgba(255,255,255,0.04); color: var(--text-color);">💡 Tactical Insight</button>
+            <button type="button" class="tag-chip" onclick="applyCommentAngle('offer')" style="cursor: pointer; font-size: 0.72rem; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: rgba(255,255,255,0.04); color: var(--text-color);">🤝 Zero-Friction Blueprint</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" id="modal-submit-btn">Send Now via Browser</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for Managing and Expanding Search Queries -->
+  <div class="modal-overlay" id="keywords-modal">
+    <div class="modal-box modal-lg">
+      <div class="modal-header">
+        <div>
+          <h3 id="kw-modal-title">Lead Search Query & Keyword Strategy</h3>
+          <p class="modal-meta">Configure the search phrases the engine uses to hunt high-intent buyer inquiries.</p>
+        </div>
+        <button class="modal-close" onclick="closeKeywordsModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Quick Add Single Query -->
+        <div class="kw-add-row">
+          <input type="text" id="kw-new-input" placeholder="Enter new search query (e.g. 'looking for reels editor')..." class="kw-input-flex" onkeydown="if(event.key==='Enter'){event.preventDefault();addSingleKeyword();}">
+          <button class="btn btn-primary" onclick="addSingleKeyword()">+ Add Query</button>
+        </div>
+
+        <!-- AI Expansion Box -->
+        <div class="kw-ai-box">
+          <div class="kw-ai-top">
+            <span class="kw-ai-icon">✨</span>
+            <div>
+              <strong>AI Query Expander</strong>
+              <p>Type a topic or service (e.g., "Meta Ads agency" or "Shopify dropshipping") and AI will craft 15 commercial buying queries.</p>
+            </div>
+          </div>
+          <div class="kw-ai-row">
+            <input type="text" id="kw-ai-topic-input" placeholder="Topic: e.g. B2B lead generation, Shopify checkout..." class="kw-input-flex">
+            <button class="btn btn-emerald" onclick="expandTopicInModal()" id="btn-modal-expand">Generate 15 Queries ✨</button>
+          </div>
+        </div>
+
+        <!-- Active Keywords Chips List -->
+        <div class="kw-list-container">
+          <div class="kw-list-header">
+            <strong>Active Queries (<span id="modal-kw-count">0</span>):</strong>
+            <button class="btn btn-xs btn-outline text-danger" onclick="clearAllKeywords()">Clear All</button>
+          </div>
+          <div class="kw-chips-grid" id="modal-kw-chips">
+            <!-- Dynamically populated chips with remove buttons -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeKeywordsModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveKeywordsFromModal()">Save & Apply Queries</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for Google Maps AI Pitches & Call Scripts -->
+  <div class="modal-overlay" id="modal-maps-pitch" style="display: none;">
+    <div class="modal-box modal-lg">
+      <div class="modal-header">
+        <div>
+          <h3 id="modal-pitch-business-name">Business Name</h3>
+          <p class="modal-meta" id="modal-pitch-meta">Category • Location</p>
+        </div>
+        <button class="modal-close" onclick="closeMapsPitchModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Outreach Version Switcher (Version 1: AI Avatar Value vs Version 2: Audit Invitation) -->
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.85rem; background: rgba(255, 255, 255, 0.04); padding: 0.4rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+          <button class="btn btn-xs btn-primary" id="btn-pitch-v1" onclick="switchOutreachVersion('v1')" style="flex: 1; padding: 0.45rem 0.6rem; font-weight: 700;">
+            🔥 Version 1: Direct ℞ Doctor AI Avatar (No Fee Payment)
+          </button>
+          <button class="btn btn-xs btn-outline" id="btn-pitch-v2" onclick="switchOutreachVersion('v2')" style="flex: 1; padding: 0.45rem 0.6rem; font-weight: 700;">
+            📋 Version 2: 2-Minute Practice Audit & Scorecard Invitation
+          </button>
+        </div>
+
+        <!-- Pitch Sub-Tabs -->
+        <div class="pitch-subtabs">
+          <button class="pitch-subtab active" id="tab-btn-rx" onclick="switchPitchSubTab('rx')">🩺 ℞ Doctor's Rx Prescription</button>
+          <button class="pitch-subtab" id="tab-btn-audit" onclick="switchPitchSubTab('audit')">🔍 Social Media Audit & AI Avatar</button>
+          <button class="pitch-subtab" id="tab-btn-wa" onclick="switchPitchSubTab('whatsapp')">💬 WhatsApp / DM Pitch</button>
+          <button class="pitch-subtab" id="tab-btn-call" onclick="switchPitchSubTab('call')">📞 Receptionist & Call Script</button>
+          <button class="pitch-subtab" id="tab-btn-email" onclick="switchPitchSubTab('email')">✉️ Cold Email Pitch</button>
+        </div>
+
+        <!-- Subpane 0: Doctor's Rx Clinical Prescription -->
+        <div class="pitch-subpane active" id="pane-pitch-rx">
+          <div class="pitch-pane-top">
+            <span class="pitch-hint" id="rx-pane-hint">🩺 <strong>Authentic Clinical Prescription Format</strong>: Prescribes Doctor AI Avatar & Voice Cloned Reels to fix video absence, and respectfully asks for their consultation fee & clinic hours.</span>
+            <div class="pitch-actions-group">
+              <button class="btn btn-sm btn-outline" id="btn-copy-rx" onclick="copyPitchText('rx')">📋 Copy Rx Pitch</button>
+              <a href="#" target="_blank" class="btn btn-sm btn-success" id="btn-open-wa-rx">
+                <span>💬 Send WhatsApp</span>
+              </a>
+              <a href="#" target="_blank" class="btn btn-sm btn-outline-ig" id="btn-open-ig-dm" style="display: none;">
+                <span>📸 Instagram DM</span>
+              </a>
+              <a href="#" target="_blank" class="btn btn-sm btn-outline-fb" id="btn-open-fb-dm" style="display: none;">
+                <span>📘 Messenger DM</span>
+              </a>
+              <a href="#" class="btn btn-sm btn-outline" id="btn-open-email-rx">
+                <span>✉️ Open Email</span>
+              </a>
+            </div>
+          </div>
+          <div class="rx-prescription-pad">
+            <div class="rx-pad-header">
+              <div class="rx-symbol" id="rx-pad-symbol">℞</div>
+              <div class="rx-title-group">
+                <div class="rx-main-title" id="rx-pad-main-title">CLINICAL GROWTH & PATIENT ACQUISITION PRESCRIPTION</div>
+                <div class="rx-sub-title" id="rx-pad-sub-title">Personal Brand Authority & Viral Reels Protocol</div>
+              </div>
+              <div class="rx-badge" id="rx-specialty-badge">Dental / Medical</div>
+            </div>
+            <pre class="pitch-pre-box rx-pre-box" id="pitch-text-rx"></pre>
+          </div>
+        </div>
+
+        <!-- Subpane 1: Social Media Audit & AI Avatar Plan -->
+        <div class="pitch-subpane" id="pane-pitch-audit" style="display: none;">
+          <div class="pitch-pane-top">
+            <span class="pitch-hint">🔍 <strong>Deep Social Media Audit</strong>: Analyzes channels, video absence, and generates custom Viral Reel Hooks with an AI Voice Clone gameplan.</span>
+            <button class="btn btn-sm btn-primary" id="btn-refresh-social-audit" onclick="refreshActiveSocialAudit()">
+              <span>⚡ Re-Analyze Social Channels</span>
+            </button>
+          </div>
+
+          <!-- Audit Scoreboard & Channel Badges -->
+          <div class="social-audit-card">
+            <div class="audit-header-row">
+              <div class="audit-score-pill">
+                <span class="audit-score-num" id="audit-score-num">0</span>
+                <span class="audit-score-denom">/100</span>
+                <span class="audit-score-label">Social & Video Health</span>
+              </div>
+              <div class="audit-diagnosis-box">
+                <div class="audit-diag-title">Diagnosis & Finding:</div>
+                <div class="audit-diag-text" id="audit-diagnosis-text">Analyzing presence...</div>
+              </div>
+            </div>
+
+            <div class="audit-channels-row" id="audit-channels-container">
+              <!-- Dynamically populated channel pills -->
+            </div>
+
+            <!-- AI Avatar & Voice Cloning Protocol -->
+            <div class="avatar-protocol-box">
+              <div class="protocol-header">
+                <span class="protocol-icon" id="audit-protocol-icon">🤖</span>
+                <h4 id="audit-protocol-title">Doctor AI Avatar & Voice Cloning Protocol</h4>
+                <span class="protocol-tag" id="audit-protocol-tag">Zero Clinic Hours Required</span>
+              </div>
+              <div class="protocol-steps-grid">
+                <div class="protocol-step">
+                  <div class="step-num">1</div>
+                  <div class="step-title">2-Min Smartphone Capture</div>
+                  <div class="step-desc" id="audit-step1-desc">Doctor records one clean talking sample on their phone once. Never needs to spend clinic time filming again.</div>
+                </div>
+                <div class="protocol-step">
+                  <div class="step-num">2</div>
+                  <div class="step-title">Voice & Likeness Clone</div>
+                  <div class="step-desc" id="audit-step2-desc">AI clones exact vocal timbre, clinical cadence, and facial movements across English, Hindi, and regional languages.</div>
+                </div>
+                <div class="protocol-step">
+                  <div class="step-num">3</div>
+                  <div class="step-title">15–20 Viral Reels / Mo</div>
+                  <div class="step-desc" id="audit-step3-desc">AI generates high-yield patient education videos answering common fears and debunking myths on autopilot.</div>
+                </div>
+                <div class="protocol-step">
+                  <div class="step-num">4</div>
+                  <div class="step-title">24/7 WhatsApp Lead Bot</div>
+                  <div class="step-desc" id="audit-step4-desc">Comment-to-DM automation converts viewers into confirmed consultations and clinic footfall.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Viral Reel Hooks Ready to Deploy -->
+            <div class="reel-hooks-section">
+              <div class="hooks-header">
+                <h4 id="audit-hooks-heading">🎯 3 Viral Reel Hooks Customized for this Practice</h4>
+                <span class="hooks-subtitle">Proven high-retention frameworks to establish instant authority</span>
+              </div>
+              <div class="hooks-list" id="audit-hooks-container">
+                <!-- Dynamically populated reel hooks -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subpane 2: Call / Receptionist Script -->
+        <div class="pitch-subpane" id="pane-pitch-call" style="display: none;">
+          <div class="pitch-pane-top">
+            <span class="pitch-hint" id="hint-pitch-call">💡 Phone script for calling the clinic coordinator or doctor directly, asking for consultation fee and timings</span>
+            <button class="btn btn-sm btn-outline" onclick="copyPitchText('call')">📋 Copy Script</button>
+          </div>
+          <pre class="pitch-pre-box" id="pitch-text-call"></pre>
+        </div>
+
+        <!-- Subpane 3: WhatsApp Message -->
+        <div class="pitch-subpane" id="pane-pitch-whatsapp" style="display: none;">
+          <div class="pitch-pane-top">
+            <span class="pitch-hint" id="hint-pitch-wa">💡 Ready-to-send WhatsApp / Social DM message with bolding, Rx badge, and fee inquiry</span>
+            <div class="pitch-actions-group">
+              <button class="btn btn-sm btn-outline" onclick="copyPitchText('whatsapp')">📋 Copy Message</button>
+              <a href="#" target="_blank" class="btn btn-sm btn-success" id="btn-open-wa-direct">
+                <span>💬 Open WhatsApp Web</span>
+              </a>
+            </div>
+          </div>
+          <pre class="pitch-pre-box" id="pitch-text-whatsapp"></pre>
+        </div>
+
+        <!-- Subpane 4: Cold Email -->
+        <div class="pitch-subpane" id="pane-pitch-email" style="display: none;">
+          <div class="pitch-pane-top">
+            <span class="pitch-hint" id="hint-pitch-email">💡 Value-first cold email proposal with subject line</span>
+            <button class="btn btn-sm btn-outline" onclick="copyPitchText('email')">📋 Copy Email</button>
+          </div>
+          <pre class="pitch-pre-box" id="pitch-text-email"></pre>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeMapsPitchModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: VIEW INBOUND SCORECARD SUBMISSION & ℞ PRESCRIPTION -->
+  <div class="modal-overlay" id="modal-scorecard-detail" style="display: none;">
+    <div class="modal-box modal-lg">
+      <div class="modal-header">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="badge badge-primary">📋 Scorecard Diagnostic Inbound</span>
+            <span class="badge" id="modal-sc-grade-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">Score: 35/100</span>
+          </div>
+          <h3 id="modal-sc-doctor-title" style="margin-top: 0.35rem;">Dr. Name (Practice Name)</h3>
+          <p class="modal-meta" id="modal-sc-meta">Specialty • City • Phone: ... • Email: ...</p>
+        </div>
+        <button class="modal-close" onclick="closeScorecardDetailModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Action Quick Bar -->
+        <div class="pitch-pane-top" style="margin-bottom: 1rem;">
+          <span class="pitch-hint">🩺 <strong>Inbound Prospect Diagnostic</strong>: Completed the 2-minute test and requested their personalized AI Avatar & Reels prescription.</span>
+          <div class="pitch-actions-group">
+            <a href="#" target="_blank" class="btn btn-sm btn-primary" id="modal-sc-pdf-btn" style="background: #0284c7; border-color: #0284c7;">
+              <span>📄 View / Download ℞ PDF</span>
+            </a>
+            <button class="btn btn-sm btn-outline" onclick="copyScorecardModalRx()">📋 Copy ℞ Text</button>
+            <a href="#" target="_blank" class="btn btn-sm btn-success" id="modal-sc-wa-btn">
+              <span>💬 WhatsApp Follow-Up</span>
+            </a>
+            <a href="#" class="btn btn-sm btn-outline" id="modal-sc-email-btn">
+              <span>✉️ Send Email</span>
+            </a>
+            <a href="https://topmate.io/isurajjaiswal" target="_blank" class="btn btn-sm btn-outline" id="modal-sc-topmate-btn">
+              <span>📅 Topmate Calendar</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Consultation & Clinical Fee Strip -->
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 1.25rem;">
+          <div>
+            <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Standard Consultation Fee</div>
+            <div id="modal-sc-fee" style="font-weight: 700; color: #10b981; font-size: 1rem; margin-top: 2px;">Not Specified</div>
+          </div>
+          <div>
+            <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Preferred Timings</div>
+            <div id="modal-sc-timing" style="font-weight: 700; color: #f8fafc; font-size: 0.92rem; margin-top: 2px;">Flexible</div>
+          </div>
+          <div>
+            <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Lead Status</div>
+            <select id="modal-sc-status-select" class="filter-select" style="padding: 0.25rem 0.5rem; margin-top: 2px; font-size: 0.8rem;" onchange="updateScorecardStatusFromModal(this.value)">
+              <option value="new">🔥 New Inbound</option>
+              <option value="contacted">💬 Follow-up Sent</option>
+              <option value="meeting_booked">📅 Topmate Meeting Booked</option>
+              <option value="converted">🏆 Converted Client</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Score Breakdown Cards -->
+        <div class="sc-breakdown-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
+          <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 0.75rem; text-align: center;">
+            <div id="modal-sc-score-video" style="font-size: 1.25rem; font-weight: 800; color: #ef4444;">12/100</div>
+            <div style="font-size: 0.72rem; color: #94a3b8;">🎥 Video & Reels Authority</div>
+          </div>
+          <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 0.75rem; text-align: center;">
+            <div id="modal-sc-score-disc" style="font-size: 1.25rem; font-weight: 800; color: #f59e0b;">40/100</div>
+            <div style="font-size: 0.72rem; color: #94a3b8;">📍 Local Discovery & Maps</div>
+          </div>
+          <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 0.75rem; text-align: center;">
+            <div id="modal-sc-score-conv" style="font-size: 1.25rem; font-weight: 800; color: #3b82f6;">50/100</div>
+            <div style="font-size: 0.72rem; color: #94a3b8;">⚡ Lead Response Speed</div>
+          </div>
+        </div>
+
+        <!-- Generated Prescription Pad -->
+        <div class="rx-prescription-pad" style="margin-bottom: 1.25rem;">
+          <div class="rx-pad-header">
+            <div class="rx-symbol">℞</div>
+            <div class="rx-title-group">
+              <div class="rx-main-title">OFFICIAL CLINICAL GROWTH PRESCRIPTION</div>
+              <div class="rx-sub-title">Personalized AI Avatar & Voice Cloned Reels Gameplan</div>
+            </div>
+            <div class="rx-badge">Generated via Test</div>
+          </div>
+          <pre class="pitch-pre-box rx-pre-box" id="modal-sc-rx-pre" style="max-height: 280px;"></pre>
+        </div>
+
+        <!-- Doctor's Diagnostic Answers Summary -->
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+          <div style="font-size: 0.82rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 0.5rem;">
+            📝 Diagnostic Questionnaire Responses
+          </div>
+          <div id="modal-sc-answers-list" style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.82rem; color: #cbd5e1;">
+            <!-- Rendered answers -->
+          </div>
+        </div>
+
+        <!-- Follow-up Notes -->
+        <div>
+          <label style="display: block; font-size: 0.8rem; font-weight: 700; color: #94a3b8; margin-bottom: 0.35rem;">CRM Follow-up Notes</label>
+          <div style="display: flex; gap: 0.5rem;">
+            <input type="text" id="modal-sc-notes-input" placeholder="e.g. Sent sample AI avatar on WhatsApp, agreed to 10-min briefing on Thursday..." style="flex: 1; padding: 0.5rem 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #fff; font-size: 0.85rem;" />
+            <button class="btn btn-sm btn-primary" onclick="saveScorecardNotesFromModal()">Save Note</button>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeScorecardDetailModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=9"></script>
+</body>
+</html>

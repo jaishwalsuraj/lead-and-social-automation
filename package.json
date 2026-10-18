@@ -1,0 +1,32 @@
+{
+  "name": "lead-and-social-automation",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server/index.js",
+    "dev": "node src/server/index.js",
+    "cdp": "node engine/scripts/launch-browser-cdp.js --browser=chrome",
+    "onboard": "cd engine && node threads-agent.js onboard",
+    "engine:scan": "cd engine && node threads-agent.js scan",
+    "engine:analyze": "cd engine && node threads-agent.js analyze",
+    "engine:approve": "cd engine && node threads-agent.js approve",
+    "engine:status": "cd engine && node threads-agent.js status",
+    "engine:social": "cd engine && node agentic-social.js",
+    "engine:job": "cd engine && node job-agent.js run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Anti-Gravity Autonomous Social Growth & Lead Automation Engine",
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "pdf-parse": "^1.1.1",
+    "playwright": "^1.64.1",
+    "puppeteer-core": "^25.11.0",
+    "ws": "^8.22.0"
+  }
+}

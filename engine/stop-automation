@@ -1,0 +1,71 @@
+#!/data/data/com.termux/files/usr/bin/env bash
+# Stops both Meta Automation execution planes. Browser windows remain open.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
+
+echo "=================================================="
+echo "  STOPPING META AUTOMATION"
+echo "=================================================="
+
+STOPPED=false
+
+stop_pid_file() {
+  local name="$1"
+  local file="$2"
+
+  if [ ! -f "$file" ]; then
+    return 0
+  fi
+
+  local pid
+  pid="$(cat "$file" 2>/dev/null || true)"
+
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    echo "Stopping $name (PID $pid)..."
+    kill -TERM "$pid" 2>/dev/null || true
+    sleep 2
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -9 "$pid" 2>/dev/null || true
+    fi
+    STOPPED=true
+  fi
+
+  rm -f "$file"
+}
+
+stop_pid_file "Social Automation" "$SCRIPT_DIR/threads-agent.pid"
+stop_pid_file "Job Revenue Engine" "$SCRIPT_DIR/job-agent.pid"
+
+PIDS="$(pgrep -f "node threads-agent\.js run" || true)"
+if [ -n "$PIDS" ]; then
+  echo "Stopping orphaned social worker(s): $PIDS"
+  kill -TERM $PIDS 2>/dev/null || true
+  sleep 1
+  kill -9 $PIDS 2>/dev/null || true
+  STOPPED=true
+fi
+
+PIDS="$(pgrep -f "node job-agent\.js run" || true)"
+if [ -n "$PIDS" ]; then
+  echo "Stopping orphaned job worker(s): $PIDS"
+  kill -TERM $PIDS 2>/dev/null || true
+  sleep 1
+  kill -9 $PIDS 2>/dev/null || true
+  STOPPED=true
+fi
+
+rm -f "$SCRIPT_DIR/autopilot-mode.json" 2>/dev/null || true
+
+if command -v termux-wake-unlock >/dev/null 2>&1; then
+  termux-wake-unlock 2>/dev/null || true
+fi
+
+if [ "$STOPPED" = true ]; then
+  echo "✅ Active Autopilot worker stopped."
+else
+  echo "⚪ No active automation workers found."
+fi
+
+echo "Browser windows were left open intentionally."
+

@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# installers/install-android-termux.sh
+# 1-Click Complete Setup & Installer for Android (Termux + Termux:X11)
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+echo "=================================================="
+echo "  📱 META AUTOMATION — ANDROID TERMUX INSTALLER"
+echo "=================================================="
+echo "Project Directory: $SCRIPT_DIR"
+echo ""
+
+# 1. Verify Termux environment
+if [ -z "$PREFIX" ] || [ ! -d "/data/data/com.termux" ]; then
+    echo "⚠️  This installer is specifically designed to run inside the Termux app on Android."
+    echo "    Continuing installation for Termux-compatible environments..."
+fi
+
+# 2. Update Termux base repositories
+echo "[1/8] Updating Termux package repositories..."
+pkg update -y || apt update -y
+
+# 3. Enable x11-repo and tur-repo (Termux User Repository)
+echo "[2/8] Enabling x11-repo and tur-repo..."
+pkg install -y x11-repo tur-repo || true
+
+# 4. Install Node.js, Chromium, Termux:X11, Git, ADB, termux-api and browser tooling
+echo "[3/8] Installing Node.js LTS, Chromium, X11, and terminal utilities..."
+pkg install -y \
+    nodejs-lts \
+    git \
+    curl \
+    wget \
+    jq \
+    tar \
+    bash \
+    findutils \
+    procps \
+    termux-api \
+    termux-x11-nightly \
+    chromium \
+    android-tools \
+    pulseaudio \
+    xorg-xauth \
+    xorg-xdpyinfo || true
+
+echo "✅ Node.js: $(node -v 2>/dev/null || echo 'Installed')"
+echo "✅ Chromium: $(chromium-browser --version 2>/dev/null || chromium --version 2>/dev/null || echo 'Installed')"
+
+# 5. Configure Antigravity-first AI environment
+ echo "[4/8] Preparing Antigravity-first AI + job-revenue environment..."
+if [ ! -f "$SCRIPT_DIR/.env" ]; then
+    cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/.env"
+fi
+# Antigravity with active Gemini session is primary.
+
+# 6. Configure Termux Preferences & Display Support
+echo "[5/8] Configuring Termux preferences and display settings..."
+mkdir -p "$HOME/.termux"
+if [ ! -f "$HOME/.termux/termux.properties" ] || ! grep -q "allow-external-apps" "$HOME/.termux/termux.properties"; then
+    echo "allow-external-apps = true" >> "$HOME/.termux/termux.properties"
+fi
+
+if ! grep -q "DISPLAY=" "$HOME/.bashrc" 2>/dev/null; then
+    echo 'export DISPLAY="${DISPLAY:-:1}"' >> "$HOME/.bashrc"
+fi
+export DISPLAY="${DISPLAY:-:1}"
+
+# 7. Install Project Dependencies
+echo "[6/8] Installing Node.js dependencies..."
+npm install
+
+# 8. Configure Environment
+echo "[7/8] Finalizing .env for Termux..."
+if [ ! -f "$SCRIPT_DIR/.env" ]; then
+    cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/.env"
+fi
+
+sed -i 's|^THREADS_CDP_URL=.*|THREADS_CDP_URL=http://127.0.0.1:9222|' "$SCRIPT_DIR/.env" 2>/dev/null || true
+sed -i 's|^AI_PROVIDER=.*|AI_PROVIDER=antigravity|' "$SCRIPT_DIR/.env" 2>/dev/null || true
+sed -i 's|^AI_RUNTIME=.*|AI_RUNTIME=antigravity|' "$SCRIPT_DIR/.env" 2>/dev/null || true
+sed -i 's|^AI_MODEL=.*|AI_MODEL=Gemini 3.8 Flash|' "$SCRIPT_DIR/.env" 2>/dev/null || true
+
+# 8. Set Executable Permissions
+chmod +x "$SCRIPT_DIR"/start-* "$SCRIPT_DIR"/stop-* "$SCRIPT_DIR"/status-* "$SCRIPT_DIR"/scripts/*.sh "$SCRIPT_DIR"/threads-agent.js "$SCRIPT_DIR"/job-agent.js "$SCRIPT_DIR"/start-termux 2>/dev/null || true
+
+# 7. Run the agentic setup after dependencies are available.
+if command -v agy >/dev/null 2>&1; then
+    echo "✅ Antigravity CLI detected: $(command -v agy)"
+else
+    echo "⚠️  Antigravity CLI (agy) was not found in PATH."
+    echo "    Keep your existing authenticated Antigravity installation and add agy to PATH."
+fi
+
+if command -v chromium-browser >/dev/null 2>&1; then
+    echo "✅ Termux Chromium executable: $(command -v chromium-browser)"
+elif command -v chromium >/dev/null 2>&1; then
+    echo "✅ Termux Chromium executable: $(command -v chromium)"
+else
+    echo "❌ Termux Chromium executable was not found after installation."
+    exit 1
+fi
+
+node "$SCRIPT_DIR/scripts/setup-job-engine.js"
+
+# setup-job-engine configures the job engine independently; social/agentic runtime remains Antigravity-first.
+sed -i 's|^AI_PROVIDER=.*|AI_PROVIDER=antigravity|' "$SCRIPT_DIR/.env" 2>/dev/null || true
+sed -i 's|^AI_RUNTIME=.*|AI_RUNTIME=antigravity|' "$SCRIPT_DIR/.env" 2>/dev/null || true
+sed -i 's|^AI_MODEL=.*|AI_MODEL=Gemini 3.8 Flash|' "$SCRIPT_DIR/.env" 2>/dev/null || true
+
+# 9. Create 1-Tap Launcher in Termux Home & Termux Widget
+echo "[8/8] Creating 1-tap launchers for Android..."
+mkdir -p "$HOME/.shortcuts"
+
+cat << 'EOF' > "$HOME/start-meta.sh"
+#!/usr/bin/env bash
+# 1-Tap Launcher for Meta Automation on Android (Termux)
+
+PROJECT_DIR="$HOME/meta-automation"
+[ ! -d "$PROJECT_DIR" ] && PROJECT_DIR="$(find "$HOME" -name "meta-automation" -o -name "threads-agent" 2>/dev/null | head -n 1)"
+
+if [ -d "$PROJECT_DIR" ]; then
+    cd "$PROJECT_DIR"
+    ./start-termux "$@"
+else
+    echo "Project directory not found in $HOME."
+    exit 1
+fi
+EOF
+
+chmod +x "$HOME/start-meta.sh"
+cp "$HOME/start-meta.sh" "$HOME/.shortcuts/start-meta" 2>/dev/null || true
+
+# Verify with test suite
+echo ""
+echo "Running test suite audit..."
+npm run test:agentic
+
+echo ""
+echo "=================================================="
+echo "  🎉 ANDROID TERMUX SETUP COMPLETE!"
+echo "=================================================="
+echo "How to run on Android:"
+echo "Option 1 (Resilient 24/7 Headless - Recommended):"
+echo "   ./start-job-automation --headless"
+echo "   (Runs continuously in background without needing Termux:X11 display)"
+echo ""
+echo "Option 2 (GUI Mode with Termux:X11):"
+echo "   Open Termux:X11 companion app, then run:"
+echo "   ~/start-meta.sh"
+echo "   (If Termux:X11 closes, automation auto-recovers to Headless without crashing)"
+echo ""
+echo "To check system health and live stats:"
+echo "   ./status-automation"
+echo ""
+echo "To stop the automation daemon:"
+echo "   ./stop-automation"
+echo "=================================================="
+

@@ -1,0 +1,9 @@
+node_modules/
+user_data/
+*.log
+.env
+.DS_Store
+bin/
+growth_engine.db*
+scratch/
+.gemini/
