@@ -32,7 +32,8 @@ const wss = new WebSocketServer({ server });
 
 app.use(applySecurityHeaders);
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 app.use(express.static(path.join(__dirname, '../../public')));
 
 // Attach WebSocket clients to orchestrator for real-time logs and events with authentication guard
@@ -1213,6 +1214,22 @@ app.post('/api/knowledge/:filename', requireAuth, requireAdmin, (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Global Express error handler to prevent stack trace leaks
+app.use((err, req, res, next) => {
+  console.error('[Internal Error Catch]:', err.message);
+  res.status(err.status || 500).json({
+    error: 'An internal server error occurred'
+  });
+});
+
+// Process-level resilience against crashes
+process.on('uncaughtException', (err) => {
+  console.error('[Process Uncaught Exception]:', err.message);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Process Unhandled Rejection]:', reason);
 });
 
 const PORT = process.env.PORT || 3000;
