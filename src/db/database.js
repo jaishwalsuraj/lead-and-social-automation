@@ -327,7 +327,7 @@ export function initDatabase() {
     { key: 'topmate_url', value: 'https://topmate.io/isurajjaiswal' },
     { key: 'agency_name', value: 'The Digital Frog' },
     { key: 'founder_name', value: 'Suraj Jaiswal' },
-    { key: 'agency_phone', value: '+91 98765 43210' },
+    { key: 'agency_phone', value: '' },
     { key: 'search_keywords', value: JSON.stringify([
       "looking for saas",
       "need ecommerce store",
@@ -1067,7 +1067,7 @@ export const GoogleMapsLeadModel = {
 
     let existing = null;
     if (cleanPhone && cleanPhone.length > 6) {
-      existing = db.prepare('SELECT id FROM google_maps_leads WHERE REPLACE(REPLACE(phone, " ", ""), "-", "") = ?').get(cleanPhone);
+      existing = db.prepare("SELECT id FROM google_maps_leads WHERE REPLACE(REPLACE(phone, ' ', ''), '-', '') = ?").get(cleanPhone);
     }
     if (!existing && cleanName && cleanCity) {
       existing = db.prepare('SELECT id FROM google_maps_leads WHERE LOWER(TRIM(business_name)) = ? AND LOWER(TRIM(city)) = ?').get(cleanName, cleanCity);

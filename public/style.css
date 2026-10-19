@@ -3673,4 +3673,218 @@ select:focus, input:focus, textarea:focus {
   filter: brightness(1.2);
 }
 
+/* Sidebar User Profile Card at Bottom Left */
+.sidebar-user-badge {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sidebar-user-badge:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-user-details {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-user-details .user-profile-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 105px;
+}
+
+/* Simplified 3-Step Workflow Bar */
+.simple-workflow-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.workflow-step.active {
+  border-color: rgba(99, 102, 241, 0.45);
+  background: rgba(99, 102, 241, 0.12);
+  color: #a5b4fc;
+}
+
+.workflow-step .step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.workflow-step.active .step-num {
+  background: #6366f1;
+  color: #fff;
+}
+
+/* Groups Hub Styles */
+.groups-search-bar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 1.25rem;
+}
+
+.groups-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.group-card {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.2s ease;
+}
+
+.group-card:hover {
+  border-color: rgba(99, 102, 241, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.group-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.group-title {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #f8fafc;
+  line-height: 1.3;
+}
+
+.group-meta-chips {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin: 0.5rem 0 0.85rem 0;
+  font-size: 0.72rem;
+}
+
+.group-chip {
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+}
+
+.group-chip.chip-active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.group-chip.chip-silent {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.admin-rules-box {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 0.65rem;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+  margin-bottom: 1rem;
+}
+
+/* Ultra-Clean Lead Cards */
+.lead-card-clean {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  padding: 1.15rem 1.25rem;
+  margin-bottom: 0.85rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lead-card-clean:hover {
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.lead-card-clean-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.65rem;
+}
+
+.lead-card-clean-author {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.lead-card-clean-post {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 3px solid #6366f1;
+  border-radius: 0 8px 8px 0;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #e2e8f0;
+  margin-bottom: 0.75rem;
+}
+
+.lead-card-clean-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
 

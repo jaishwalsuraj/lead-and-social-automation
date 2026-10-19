@@ -704,8 +704,7 @@ ${profile.feeLabel} Noted   : ${consultationFee || 'Standard Service Rate'}
 
 Prepared by:
 ${founderName}
-Founder & AI Growth Strategist | ${agencyName}
-Direct WhatsApp / Mobile Booking Available`;
+Founder & AI Growth Strategist | ${agencyName}`;
 
     return {
       niche: nicheKey,

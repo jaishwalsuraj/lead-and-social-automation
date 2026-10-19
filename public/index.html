@@ -64,6 +64,11 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
           <span>Browser Profiles</span>
         </button>
+        <button class="nav-item" id="nav-groups" onclick="switchTab('groups')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span>Community Groups</span>
+          <span class="nav-counter" id="sidebar-groups-count" style="display: none;">0</span>
+        </button>
         <button class="nav-item" id="nav-settings" onclick="switchTab('settings')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
           <span>Agent Intelligence</span>
@@ -71,6 +76,20 @@
       </nav>
 
       <div class="sidebar-footer">
+        <!-- User Profile Card & Sign Out at bottom left -->
+        <div class="user-profile-badge sidebar-user-badge" id="user-profile-badge" style="display: none;" onclick="openProfileTeamModal()" title="Manage Profile & Team Members">
+          <div class="sidebar-user-details">
+            <span class="user-avatar-circle" id="user-avatar-icon">👑</span>
+            <div class="user-profile-info">
+              <span class="user-profile-name" id="user-display-name">Suraj Jaiswal</span>
+              <span class="user-role-chip role-admin" id="user-display-role">ADMIN</span>
+            </div>
+          </div>
+          <button class="btn btn-xs btn-outline-danger" onclick="event.stopPropagation(); logoutUser()" title="Sign out of CRM" style="margin-left: 0.35rem; padding: 4px 8px;">
+            <span>Logout ⎋</span>
+          </button>
+        </div>
+
         <div class="system-status-indicator">
           <span class="status-dot pulsing"></span>
           <div>
@@ -117,17 +136,6 @@
           <button class="btn btn-secondary" onclick="copyScorecardPublicLink()" id="btn-copy-scorecard" title="Copy public link to send to doctors or prospects">
             <span>🔗 Copy Test Link</span>
           </button>
-          <!-- User Profile & Sign Out Badge -->
-          <div class="user-profile-badge" id="user-profile-badge" style="display: none;">
-            <span class="user-avatar-circle" id="user-avatar-icon">👑</span>
-            <div class="user-profile-info">
-              <span class="user-profile-name" id="user-display-name">Admin</span>
-              <span class="user-role-chip role-admin" id="user-display-role">ADMIN</span>
-            </div>
-            <button class="btn btn-xs btn-outline-danger" onclick="logoutUser()" title="Sign out of CRM" style="margin-left: 0.35rem; padding: 2px 7px;">
-              <span>Logout ⎋</span>
-            </button>
-          </div>
           <button class="btn btn-secondary" onclick="showLoginOverlay()" id="btn-header-login" style="display: none;">
             <span>Sign In 🔑</span>
           </button>
@@ -423,6 +431,8 @@
             <button class="btn btn-outline-emerald" onclick="verifyAllSocialLeads()" id="btn-verify-leads" title="Run instant live verification check to confirm 100% active profiles and purge 404s/deleted accounts">
               🛡️ <span>Verify All Leads</span>
             </button>
+            <button class="btn btn-outline" onclick="openBulkImportModal()" title="Upload CSV or paste data">📂 Import Leads</button>
+            <button class="btn btn-outline-danger" onclick="triggerPurgeDeadLeads()" title="Purge dead leads from CRM">🗑️ Purge Dead Leads</button>
             <button class="btn btn-secondary" onclick="loadLeads()">Refresh</button>
             <button class="btn btn-primary" onclick="triggerLeadScan()" id="btn-scan-connected">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -592,6 +602,8 @@
             <button class="btn btn-sm btn-outline" onclick="exportReachInboxCsv()" title="Download CSV pre-formatted for ReachInbox with clean Scorecard links">📥 Export ReachInbox CSV</button>
             <button class="btn btn-sm btn-outline" onclick="triggerAutoScorecards()" title="Automatically generate interactive scorecards & clean email links for all leads">📋 Auto-Scorecard All</button>
             <button class="btn btn-sm btn-outline-call" onclick="triggerAutoSocialEngagement()" title="Execute safe engagement pipeline: Like recent post -> Expert comment -> DM with scorecard">📱 Auto-Engage Socials</button>
+            <button class="btn btn-sm btn-outline" onclick="openBulkImportModal()" title="Upload CSV or paste lead data to filter, enrich, and auto-score leads">📂 Import Leads</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="triggerPurgeDeadLeads()" title="Permanently delete uncontactable dead leads from CRM">🗑️ Purge Dead Leads</button>
             <button class="btn btn-sm btn-outline" id="btn-maps-reverify-all" onclick="triggerBatchReverify()" title="Deep scan all existing leads to verify websites and hunt missing contact details">⚡ Re-Verify All</button>
             <button class="btn btn-sm btn-outline" onclick="loadMapsLeads()">↻ Refresh</button>
           </div>
@@ -791,6 +803,108 @@
               <h4>Instagram Session</h4>
               <p>Log in to scan hashtags, engage leads, and nurture via 1-on-1 DMs.</p>
               <button class="btn btn-primary btn-full" onclick="openPlatformLogin('instagram')">Open Instagram Login Window</button>
+            </div>
+
+            <!-- ChatGPT -->
+            <div class="login-card">
+              <div class="platform-icon" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">🤖</div>
+              <h4>ChatGPT Session</h4>
+              <p>Log into ChatGPT Plus/Team to power agent reasoning, Reels scripts, and copy automation.</p>
+              <button class="btn btn-primary btn-full" onclick="openPlatformLogin('chatgpt')" style="background: linear-gradient(135deg, #10b981, #059669);">Open ChatGPT Login Window</button>
+            </div>
+
+            <!-- Claude -->
+            <div class="login-card">
+              <div class="platform-icon" style="background: rgba(217, 119, 6, 0.15); color: #f59e0b;">🎭</div>
+              <h4>Claude Session</h4>
+              <p>Log into Claude Pro to synthesize high-authority expert advice and strategic clinical roadmaps.</p>
+              <button class="btn btn-primary btn-full" onclick="openPlatformLogin('claude')" style="background: linear-gradient(135deg, #d97706, #b45309);">Open Claude Login Window</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: COMMUNITY GROUPS (FB & LINKEDIN) -->
+      <section id="tab-groups" class="tab-pane">
+        <div class="section-card">
+          <div class="section-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.35rem;">👥</span>
+                <h3 style="margin: 0; font-size: 1.2rem;">Community Groups Authority & Lead Hub</h3>
+              </div>
+              <p class="text-muted" style="margin: 0.35rem 0 0 0; font-size: 0.88rem;">
+                Discover active niche groups on Facebook & LinkedIn, track admin rules to prevent bans, audit silent groups, and generate value-first expert responses that attract inbound inquiries.
+              </p>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn btn-sm btn-primary" onclick="searchGroupsFromUi()">🔍 Hunt Active Groups</button>
+              <button class="btn btn-sm btn-outline" onclick="auditGroupsFromUi()">🧹 Audit Inactive Groups</button>
+            </div>
+          </div>
+
+          <!-- Groups Action & Filter Bar -->
+          <div class="groups-search-bar">
+            <input type="text" id="groups-search-topic" placeholder="Niche topic (e.g. clinic owners, dentists, medspa, ecommerce)..." style="flex: 2; padding: 0.65rem 0.9rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.3); color: #fff;">
+            <select id="groups-platform-select" style="flex: 1; padding: 0.65rem 0.9rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.3); color: #fff;">
+              <option value="facebook" selected>👥 Facebook Groups</option>
+              <option value="linkedin">💼 LinkedIn Groups</option>
+            </select>
+            <button class="btn btn-primary" onclick="searchGroupsFromUi()">Search Groups</button>
+          </div>
+
+          <!-- Groups Sub-Navigation Tabs -->
+          <div class="crm-pipeline-bar" style="margin-bottom: 1.25rem;">
+            <button class="stage-tab active" id="tab-btn-groups-discovered" onclick="switchGroupSubTab('discovered')">
+              <span class="stage-icon">🎯</span>
+              <span class="stage-title">Discovered Active Groups</span>
+              <span class="stage-count" id="count-groups-discovered">0</span>
+            </button>
+            <button class="stage-tab" id="tab-btn-groups-joined" onclick="switchGroupSubTab('joined')">
+              <span class="stage-icon">📋</span>
+              <span class="stage-title">Joined & Inactivity Auditor</span>
+              <span class="stage-count" id="count-groups-joined">0</span>
+            </button>
+            <button class="stage-tab" id="tab-btn-groups-assistant" onclick="switchGroupSubTab('assistant')">
+              <span class="stage-icon">🛡️</span>
+              <span class="stage-title">Admin Rules & Inbound Value Assistant</span>
+            </button>
+          </div>
+
+          <!-- Groups Output Container -->
+          <div id="groups-container" class="groups-grid">
+            <div class="empty-state" style="grid-column: 1 / -1;">
+              <div class="empty-icon">👥</div>
+              <h3>Find High-Intent Facebook & LinkedIn Communities</h3>
+              <p>Enter your target audience (e.g. <em>"clinic owners"</em> or <em>"ecommerce directors"</em>) and click <strong>"Hunt Active Groups"</strong>.</p>
+            </div>
+          </div>
+
+          <!-- Admin Rules & Inbound Value Assistant View (Hidden by default) -->
+          <div id="groups-assistant-view" style="display: none; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 1.5rem;">
+            <div style="font-weight: 700; font-size: 1.05rem; margin-bottom: 0.5rem; color: #fff;">
+              🛡️ Admin Rules Guard & Value-First Response Synthesizer
+            </div>
+            <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 1rem;">
+              Admin bots automatically ban accounts that drop external links or sales pitches. This tool synthesizes a 100% compliant expert answer that solves the member's problem and prompts them to reach out to you directly.
+            </p>
+            <div class="form-group">
+              <label for="group-post-text">Inquiry Post from Group Member</label>
+              <textarea id="group-post-text" rows="3" placeholder="Paste the prospect's post here (e.g. 'Looking for advice on increasing private patient inquiries without huge ad spend...')"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="group-author-name">Member Name</label>
+              <input type="text" id="group-author-name" placeholder="e.g. Dr. Robert">
+            </div>
+            <div class="form-group">
+              <label for="group-rules-text">Group Rules (Optional)</label>
+              <input type="text" id="group-rules-text" placeholder="e.g. 'No self-promo, no links in post/comments'">
+            </div>
+            <button class="btn btn-primary" onclick="generateSafeGroupResponseFromUi()">✨ Synthesize Admin-Safe Expert Response</button>
+            <div id="group-response-result" style="margin-top: 1rem; display: none;">
+              <label>Synthesized Response (Ready to Post):</label>
+              <textarea id="group-response-text" rows="4" style="background: rgba(0,0,0,0.4); font-family: inherit; font-size: 0.9rem;"></textarea>
+              <button class="btn btn-sm btn-outline" onclick="copyGroupResponseAndToast()" style="margin-top: 0.5rem;">📋 Copy to Clipboard</button>
             </div>
           </div>
         </div>
@@ -1693,6 +1807,138 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeReachInboxModal()">Cancel</button>
         <button class="btn btn-primary" id="btn-submit-reachinbox-sync" onclick="submitReachInboxSync()">🚀 Sync to ReachInbox Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Bulk Lead Data Importer & Diagnostic Enricher -->
+  <div class="modal-overlay" id="modal-bulk-import" style="display: none;">
+    <div class="modal-box" style="max-width: 620px;">
+      <div class="modal-header">
+        <div>
+          <h3>📂 Bulk Lead Importer & Diagnostic Enricher</h3>
+          <p class="modal-meta">Upload CSV or paste lead data to filter, enrich, score, and auto-generate scorecards.</p>
+        </div>
+        <button class="modal-close" onclick="closeBulkImportModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1.15rem; font-size: 0.82rem; color: #cbd5e1; line-height: 1.5;">
+          🛡️ <strong>Automated Protection & Enrichment:</strong><br>
+          • Drops excluded countries (Bangladesh, Pakistan, Nepal, Bhutan, Sri Lanka)<br>
+          • Auto-computes 3 diagnostic pillars (Video, Discovery, Conversion 0-100)<br>
+          • Injects clean public scorecard links & personalized email copy<br>
+          • Flags unreachable/dead leads for easy 1-click purging.
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label for="bulk-file-input">Option A: Upload CSV File</label>
+          <input type="file" id="bulk-file-input" accept=".csv,.txt" onchange="handleBulkFileSelect(event)" style="padding: 0.4rem; background: rgba(0,0,0,0.3); border: 1px dashed var(--border-color); border-radius: 8px; width: 100%;">
+          <small class="form-hint">Accepted headers: Company, Email, Phone, Website, City, Niche/Specialty.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="bulk-text-input">Option B: Or Paste CSV / Plain Text</label>
+          <textarea id="bulk-text-input" rows="5" placeholder="Company, Phone, Email, Website, City&#10;Austin Dental Spa, +15125551234, info@austindental.com, https://austindental.com, Austin" style="background: rgba(0,0,0,0.4); font-family: monospace; font-size: 0.8rem;"></textarea>
+        </div>
+
+        <div id="bulk-import-progress" style="display: none; padding: 0.75rem; border-radius: 8px; font-size: 0.85rem; margin-top: 0.75rem;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeBulkImportModal()">Cancel</button>
+        <button class="btn btn-primary" id="btn-submit-bulk-import" onclick="submitBulkImport()">🚀 Import & Score Leads</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: User Profile & Team Management -->
+  <div class="modal-overlay" id="modal-profile-team" style="display: none;">
+    <div class="modal-box" style="max-width: 650px;">
+      <div class="modal-header">
+        <div>
+          <h3>⚙️ Profile & Team Management</h3>
+          <p class="modal-meta">Manage your personal credentials, profile details, and team member access.</p>
+        </div>
+        <button class="modal-close" onclick="closeProfileTeamModal()">&times;</button>
+      </div>
+
+      <!-- Profile Tabs -->
+      <div class="crm-pipeline-bar" style="margin: 0.5rem 1.25rem 0 1.25rem;">
+        <button class="stage-tab active" id="tab-btn-my-profile" onclick="switchProfileModalTab('profile')">
+          <span class="stage-icon">👤</span>
+          <span class="stage-title">My Personal Details</span>
+        </button>
+        <button class="stage-tab" id="tab-btn-team-mgmt" onclick="switchProfileModalTab('team')">
+          <span class="stage-icon">👥</span>
+          <span class="stage-title">Team Addition & Roles</span>
+        </button>
+      </div>
+
+      <div class="modal-body" style="padding-top: 1rem;">
+        <!-- Tab 1: Personal Details -->
+        <div id="pane-my-profile">
+          <form onsubmit="saveUserProfile(event)">
+            <div class="form-group">
+              <label for="profile-username">Username / Identifier</label>
+              <input type="text" id="profile-username" readonly style="opacity: 0.7; cursor: not-allowed;">
+            </div>
+            <div class="form-group">
+              <label for="profile-email">Official Email Address</label>
+              <input type="email" id="profile-email" placeholder="e.g. dmsuraj3@gmail.com" required>
+              <small class="form-hint">Used for password resets, recovery notifications, and super admin operations.</small>
+            </div>
+            <div class="form-group">
+              <label for="profile-new-password">Change Password (Optional)</label>
+              <input type="password" id="profile-new-password" placeholder="Leave blank to keep existing password" minlength="8">
+              <small class="form-hint">Must be at least 8 characters with a mix of letters and numbers.</small>
+            </div>
+            <div id="profile-save-status" style="margin-top: 0.5rem; font-size: 0.85rem;"></div>
+            <div style="margin-top: 1rem; display: flex; justify-content: flex-end;">
+              <button type="submit" class="btn btn-primary">💾 Save Profile Details</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Tab 2: Team Addition & Access Control -->
+        <div id="pane-team-mgmt" style="display: none;">
+          <form onsubmit="addNewTeamMemberFromModal(event)" style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-bottom: 1.25rem;">
+            <div style="font-weight: 700; color: #fff; font-size: 0.95rem; margin-bottom: 0.75rem;">➕ Add New Team Member</div>
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+              <div class="form-group">
+                <label for="team-add-username">Username</label>
+                <input type="text" id="team-add-username" placeholder="e.g. alex_growth" required>
+              </div>
+              <div class="form-group">
+                <label for="team-add-email">Email</label>
+                <input type="email" id="team-add-email" placeholder="e.g. alex@thedigitalfrog.com" required>
+              </div>
+            </div>
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.5rem;">
+              <div class="form-group">
+                <label for="team-add-password">Temporary Password</label>
+                <input type="password" id="team-add-password" placeholder="At least 8 characters" minlength="8" required>
+              </div>
+              <div class="form-group">
+                <label for="team-add-role">Access Role</label>
+                <select id="team-add-role">
+                  <option value="user" selected>Team Member (SDR / Outreach)</option>
+                  <option value="admin">Administrator (Full Access)</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-top: 0.85rem; display: flex; justify-content: flex-end;">
+              <button type="submit" class="btn btn-sm btn-primary">➕ Create Team Account</button>
+            </div>
+            <div id="team-add-status" style="margin-top: 0.5rem; font-size: 0.85rem;"></div>
+          </form>
+
+          <div style="font-weight: 700; color: #fff; font-size: 0.9rem; margin-bottom: 0.5rem;">Current Team Members</div>
+          <div id="team-members-modal-list">
+            <!-- Team members rendered dynamically -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeProfileTeamModal()">Close</button>
       </div>
     </div>
   </div>

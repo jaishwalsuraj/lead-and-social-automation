@@ -976,8 +976,7 @@ Respectfully yours,
 
 Suraj Jaiswal
 Founder, The Digital Frog | AI Medical Growth & Personal Branding Engine
-Calendar: https://topmate.io/isurajjaiswal
-Direct WhatsApp / Phone: ${phone || 'Available upon request'}`;
+Calendar: https://topmate.io/isurajjaiswal`;
 
       const rxMessage = `℞ *CLINICAL GROWTH PRESCRIPTION* for *${drName}* (${businessName})
 
@@ -1043,8 +1042,7 @@ Respectfully yours,
 
 Suraj Jaiswal
 Founder, The Digital Frog | AI Medical Practice Growth Engine
-Calendar: https://topmate.io/isurajjaiswal
-Direct WhatsApp / Phone: ${phone || 'Available upon request'}`;
+Calendar: https://topmate.io/isurajjaiswal`;
 
       const rxMessage_v2 = `℞ *CONFIDENTIAL PRACTICE AUDIT & ℞ PRESCRIPTION* for *${drName}* (${businessName})
 
@@ -1159,8 +1157,7 @@ Respectfully yours,
 
 Suraj Jaiswal
 Founder, The Digital Frog | AI Local Growth Engine & Digital Authority Architecture
-Calendar: https://topmate.io/isurajjaiswal
-Direct WhatsApp / Phone: ${phone || 'Available upon request'}`;
+Calendar: https://topmate.io/isurajjaiswal`;
 
     // 1b. Version 1: WhatsApp / DM Pitch
     const rxMessage = `${profile.badge} *GROWTH BLUEPRINT & VIDEO AUTHORITY* for *${businessName}*
@@ -1230,8 +1227,7 @@ Respectfully yours,
 
 Suraj Jaiswal
 Founder, The Digital Frog | AI Local Growth Engine
-Calendar: https://topmate.io/isurajjaiswal
-Direct WhatsApp / Phone: ${phone || 'Available upon request'}`;
+Calendar: https://topmate.io/isurajjaiswal`;
 
     // 2b. Version 2: WhatsApp / Social DM Message (Scorecard Invitation)
     const rxMessage_v2 = `${profile.badge} *CONFIDENTIAL BUSINESS AUDIT & GROWTH BLUEPRINT* for *${businessName}*

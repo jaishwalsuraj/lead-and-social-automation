@@ -40,21 +40,80 @@ export class InstagramAdapter {
       let tagIndex = 0;
       for (const tag of hashtags) {
         tagIndex++;
-        const cleanTag = tag.replace('#', '').trim();
-        const tagUrl = `https://www.instagram.com/explore/tags/${encodeURIComponent(cleanTag)}/`;
-        console.log(`[Instagram] [${tagIndex}/${hashtags.length}] Navigating to: ${tagUrl}`);
-        LogModel.add(this.platform, 'navigating', `Exploring tag [${tagIndex}/${hashtags.length}]: #${cleanTag}`);
+        // Sanitize keyword/tag: strip leading '#', '%23', spaces, and special symbols
+        const cleanTag = String(tag)
+          .replace(/^%23/i, '')
+          .replace(/^#+/, '')
+          .trim();
+        const cleanKeyword = cleanTag.replace(/[^a-zA-Z0-9_]/g, '');
 
-        await page.goto(tagUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
-        await browserManager.humanDelay(3000, 5000);
+        if (!cleanKeyword) continue;
+
+        LogModel.add(this.platform, 'navigating', `Searching Instagram [${tagIndex}/${hashtags.length}]: #${cleanKeyword}`);
+
+        // 1. Try direct Explore Tag URL
+        let searchUrl = `https://www.instagram.com/explore/tags/${encodeURIComponent(cleanKeyword)}/`;
+        console.log(`[Instagram] [${tagIndex}/${hashtags.length}] Navigating to: ${searchUrl}`);
+
+        await page.goto(searchUrl, { timeout: 35000, waitUntil: 'domcontentloaded' }).catch(() => {});
+        await browserManager.humanDelay(2500, 4000);
+
+        // Check if page threw "Something went wrong" (as shown in user's screenshot)
+        let isErrorPage = await page.evaluate(() => {
+          const bodyText = document.body ? document.body.innerText : '';
+          return bodyText.includes('Something went wrong') ||
+                 bodyText.includes("There's an issue and the page could not be loaded") ||
+                 bodyText.includes("Sorry, this page isn't available");
+        });
+
+        // 2. If tag URL failed, fallback to Explore Keyword Search (STRICTLY clean keyword without '%23')
+        if (isErrorPage) {
+          searchUrl = `https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(cleanKeyword)}`;
+          console.log(`[Instagram] Tag URL gave error, falling back to clean keyword search: ${searchUrl}`);
+          await page.goto(searchUrl, { timeout: 35000, waitUntil: 'domcontentloaded' }).catch(() => {});
+          await browserManager.humanDelay(2500, 4000);
+
+          isErrorPage = await page.evaluate(() => {
+            const bodyText = document.body ? document.body.innerText : '';
+            return bodyText.includes('Something went wrong') ||
+                   bodyText.includes("There's an issue and the page could not be loaded");
+          });
+        }
+
+        // 3. If direct URLs still failed, navigate to Explore home and use search input
+        if (isErrorPage) {
+          console.log(`[Instagram] Direct search URLs restricted, attempting in-app search for: ${cleanKeyword}`);
+          await page.goto('https://www.instagram.com/explore/', { timeout: 35000, waitUntil: 'domcontentloaded' }).catch(() => {});
+          await browserManager.humanDelay(2000, 3500);
+
+          try {
+            const searchInput = await page.$('input[aria-label="Search input"], input[placeholder="Search"]');
+            if (searchInput && await searchInput.isVisible()) {
+              await searchInput.click().catch(() => {});
+              await searchInput.fill(cleanKeyword).catch(() => {});
+              await browserManager.humanDelay(1500, 2500);
+              await page.keyboard.press('Enter').catch(() => {});
+              await browserManager.humanDelay(3000, 4500);
+            }
+          } catch (_) {}
+        }
+
+        // Dismiss standard Instagram dialogs (Cookies, Not Now, Turn on Notifications)
+        try {
+          const dismissBtn = await page.$('button:has-text("Not Now"), button:has-text("Cancel"), button:has-text("Decline optional cookies"), button:has-text("Allow all cookies")');
+          if (dismissBtn && await dismissBtn.isVisible()) {
+            await dismissBtn.click().catch(() => {});
+            await browserManager.humanDelay(500, 1000);
+          }
+        } catch (_) {}
 
         await browserManager.smoothScroll(page, 500);
-        await browserManager.humanDelay(2000, 3500);
+        await browserManager.humanDelay(1800, 3000);
 
-        // Find post links
+        // Find post and reel links (support both /p/ and /reel/)
         const postHrefs = await page.evaluate(() => {
-          const links = Array.from(document.querySelectorAll('a[href*="/p/"]'));
-          return [...new Set(links.map(l => l.href))].slice(0, 4);
+          const links = Array.from(document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]'));
+          return [...new Set(links.map(l => l.href.split('?')[0]))].slice(0, 5);
         });
 
         for (const postUrl of postHrefs) {

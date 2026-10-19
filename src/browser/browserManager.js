@@ -115,7 +115,9 @@ export class BrowserManager {
       threads: 'https://www.threads.net/login',
       instagram: 'https://www.instagram.com/accounts/login/',
       facebook: 'https://www.facebook.com/login',
-      linkedin: 'https://www.linkedin.com/login'
+      linkedin: 'https://www.linkedin.com/login',
+      chatgpt: 'https://chatgpt.com',
+      claude: 'https://claude.ai/login'
     };
 
     const targetUrl = urlMap[platform.toLowerCase()] || 'https://www.threads.net';
@@ -239,11 +241,23 @@ export class BrowserManager {
       const linkedinLoggedIn = hasCookie('linkedin', ['li_at']) ||
                                hasOpenTab('linkedin.com/feed');
 
+      // ChatGPT is connected if session token exists or tab is open
+      const chatgptLoggedIn = hasCookie('openai', ['__Secure-next-auth.session-token', '_puid']) ||
+                              hasCookie('chatgpt', ['__Secure-next-auth.session-token']) ||
+                              hasOpenTab('chatgpt.com');
+
+      // Claude is connected if sessionKey exists or tab is open
+      const claudeLoggedIn = hasCookie('claude', ['sessionKey']) ||
+                             hasCookie('anthropic', ['sessionKey']) ||
+                             hasOpenTab('claude.ai');
+
       const statuses = [
         { platform: 'threads', loggedIn: !!threadsLoggedIn },
         { platform: 'instagram', loggedIn: !!instagramLoggedIn },
         { platform: 'facebook', loggedIn: !!facebookLoggedIn },
-        { platform: 'linkedin', loggedIn: !!linkedinLoggedIn }
+        { platform: 'linkedin', loggedIn: !!linkedinLoggedIn },
+        { platform: 'chatgpt', loggedIn: !!chatgptLoggedIn },
+        { platform: 'claude', loggedIn: !!claudeLoggedIn }
       ];
 
       this._platformCache = statuses;
@@ -255,7 +269,9 @@ export class BrowserManager {
         { platform: 'threads', loggedIn: false, error: err.message },
         { platform: 'instagram', loggedIn: false, error: err.message },
         { platform: 'facebook', loggedIn: false, error: err.message },
-        { platform: 'linkedin', loggedIn: false, error: err.message }
+        { platform: 'linkedin', loggedIn: false, error: err.message },
+        { platform: 'chatgpt', loggedIn: false, error: err.message },
+        { platform: 'claude', loggedIn: false, error: err.message }
       ];
     }
   }

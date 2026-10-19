@@ -22,6 +22,8 @@ import { MapsScorecardBridge } from '../agent/mapsScorecardBridge.js';
 import { ReachInboxClient } from '../agent/reachInboxClient.js';
 import { socialEngagementEngine } from '../agent/socialEngagementEngine.js';
 import { checkCountryExclusion, validateSearchTargeting } from '../utils/countryFilter.js';
+import { GroupsEngine } from '../platforms/groupsEngine.js';
+import { BulkLeadImporter } from '../agent/bulkLeadImporter.js';
 
 import { loginRateLimiter, forgotPwRateLimiter, resetPwRateLimiter, publicApiRateLimiter, applySecurityHeaders, isPathSafe } from './security.js';
 
@@ -1041,6 +1043,121 @@ app.post('/api/social-engagement/config', requireAuth, requireAdmin, (req, res) 
   res.json({ success: true, message: 'Engagement scheduler configuration updated.' });
 });
 
+// ==================== GROUPS ENGINE & AUTHORITY BUILDING ROUTES ====================
+
+// Search active Facebook groups in target niche
+app.post('/api/groups/search', requireAuth, async (req, res) => {
+  try {
+    const { topic, limit } = req.body;
+    const groups = await GroupsEngine.searchFacebookGroups(topic || 'clinic owners dentists', parseInt(limit || '10', 10));
+    res.json({ success: true, groups });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Audit joined groups (detect dead/inactive communities) - Supports GET and POST
+app.all('/api/groups/audit', requireAuth, async (req, res) => {
+  try {
+    const platform = req.query.platform || req.body?.platform || 'facebook';
+    const groups = await GroupsEngine.auditJoinedGroups(platform);
+    const silentCount = groups.filter(g => g.is_silent || (g.days_inactive && g.days_inactive > 30)).length;
+    res.json({ success: true, groups, silentCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Leave / remove a group
+app.post('/api/groups/:id/leave', requireAuth, (req, res) => {
+  try {
+    GroupsEngine.leaveGroup(req.params.id);
+    res.json({ success: true, message: 'Group status updated to left.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Synthesize admin-compliant, value-first response
+app.post('/api/groups/generate-response', requireAuth, async (req, res) => {
+  try {
+    const { postText, authorName, groupRules } = req.body;
+    const response = await GroupsEngine.synthesizeSafeGroupResponse(postText || '', authorName || 'Member', groupRules || '');
+    res.json({ success: true, response });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== BULK LEAD IMPORT & PURGE DEAD LEADS ====================
+
+// Bulk lead import from CSV text or JSON records
+app.post('/api/leads/import-bulk', requireAuth, async (req, res) => {
+  try {
+    const { csvText, text, records } = req.body;
+    const rawContent = csvText || text;
+    let leadRecords = [];
+    if (Array.isArray(records) && records.length > 0) {
+      leadRecords = records;
+    } else if (rawContent) {
+      leadRecords = BulkLeadImporter.parseCsv(rawContent);
+    } else {
+      return res.status(400).json({ error: 'Please provide CSV content or an array of lead records.' });
+    }
+
+    if (leadRecords.length === 0) {
+      return res.status(400).json({ error: 'No valid records found in the uploaded data.' });
+    }
+
+    const result = await BulkLeadImporter.importAndEnrich(leadRecords);
+    orchestrator.broadcast('leads_updated', { stats: GoogleMapsLeadModel.getStats() });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 1-Click Purge Dead Leads
+app.delete('/api/leads/purge-dead', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const result = BulkLeadImporter.purgeDeadLeads();
+    orchestrator.broadcast('leads_updated', { stats: GoogleMapsLeadModel.getStats() });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== USER PROFILE & TEAM DETAILS ====================
+
+app.get('/api/profile', requireAuth, (req, res) => {
+  const user = UserModel.findById(req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json({
+    id: user.id,
+    username: user.username,
+    email: user.email || '',
+    role: user.role,
+    created_at: user.created_at,
+    last_login: user.last_login
+  });
+});
+
+app.post('/api/profile', requireAuth, (req, res) => {
+  const { email, newPassword } = req.body;
+  const user = UserModel.findById(req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  if (email && email.includes('@')) {
+    db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email.trim().toLowerCase(), user.id);
+  }
+  if (newPassword && newPassword.length >= 8) {
+    UserModel.updatePassword(user.id, newPassword);
+  }
+
+  res.json({ success: true, message: 'Profile updated successfully.' });
+});
+
 // ==================== SCORECARD & DIGITAL HEALTH ASSESSMENT ROUTES ====================
 
 // Public Scorecard Web Page Route (STRICTLY OPEN / NO LOGIN)
@@ -1054,14 +1171,12 @@ app.get('/api/scorecard/config', (req, res) => {
     const topmateUrl = SettingsModel.get('topmate_url') || 'https://topmate.io/isurajjaiswal';
     const agencyName = SettingsModel.get('agency_name') || 'The Digital Frog';
     const founderName = SettingsModel.get('founder_name') || 'Suraj Jaiswal';
-    const agencyPhone = SettingsModel.get('agency_phone') || '+91 98765 43210';
 
     res.json({
       questions: scorecardQuestions,
       topmateUrl,
       agencyName,
-      founderName,
-      agencyPhone
+      founderName
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1084,7 +1199,6 @@ app.get('/api/scorecard/public-report/:id', publicApiRateLimiter.middleware(), (
     const topmateUrl = SettingsModel.get('topmate_url') || 'https://topmate.io/isurajjaiswal';
     const agencyName = SettingsModel.get('agency_name') || 'The Digital Frog';
     const founderName = SettingsModel.get('founder_name') || 'Suraj Jaiswal';
-    const agencyPhone = SettingsModel.get('agency_phone') || '+1 (512) 717-3147';
 
     res.json({
       success: true,
@@ -1104,7 +1218,6 @@ app.get('/api/scorecard/public-report/:id', publicApiRateLimiter.middleware(), (
         topmateUrl,
         agencyName,
         founderName,
-        agencyPhone,
         createdAt: lead.created_at
       }
     });

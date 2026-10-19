@@ -689,9 +689,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadMapsStats();
   loadScorecardStats();
 
-  // URL hash navigation support (#leads, #maps, #scorecard, #autopilot, etc.)
+  // URL hash navigation support (#leads, #maps, #scorecard, #groups, #autopilot, etc.)
   const hashTab = window.location.hash.replace('#', '');
-  if (hashTab && ['overview', 'leads', 'maps', 'scorecard', 'studio', 'autopilot', 'knowledge', 'accounts', 'settings'].includes(hashTab)) {
+  if (hashTab && ['overview', 'leads', 'maps', 'scorecard', 'groups', 'studio', 'autopilot', 'knowledge', 'accounts', 'settings'].includes(hashTab)) {
     switchTab(hashTab, false);
   }
 
@@ -705,7 +705,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 window.addEventListener('hashchange', () => {
   const hashTab = window.location.hash.replace('#', '');
-  if (hashTab && ['overview', 'leads', 'maps', 'scorecard', 'studio', 'autopilot', 'knowledge', 'accounts', 'settings'].includes(hashTab)) {
+  if (hashTab && ['overview', 'leads', 'maps', 'scorecard', 'groups', 'studio', 'autopilot', 'knowledge', 'accounts', 'settings'].includes(hashTab)) {
     switchTab(hashTab, false);
   }
 });
@@ -735,6 +735,7 @@ function switchTab(tabId, updateHash = true) {
     leads: 'Social Lead Hunter & Opportunity CRM Pipeline',
     maps: 'Google Maps Local Business Hunter & AI Web Dev Engine',
     scorecard: 'Inbound Scorecard Leads & ℞ Digital Health Diagnostic Pipeline',
+    groups: 'Facebook & LinkedIn Community Groups Hub (Admin Safe)',
     studio: 'Content Studio & Multi-Platform Publishing',
     autopilot: 'Autopilot Control Deck (Meta-Automation Engine)',
     knowledge: 'Knowledge Engine (Source of Truth & Grounding)',
@@ -754,6 +755,9 @@ function switchTab(tabId, updateHash = true) {
   if (tabId === 'scorecard') {
     loadScorecardLeads();
     loadScorecardStats();
+  }
+  if (tabId === 'groups') {
+    loadDiscoveredGroups();
   }
   if (tabId === 'knowledge') loadKnowledgeFiles();
   if (tabId === 'autopilot') checkCdpStatus();
@@ -1590,158 +1594,90 @@ function renderLeadsCards(leads, container) {
 
   container.innerHTML = leads.map(lead => {
     const icon = platformIcons[lead.platform] || '🌐';
-    const isHigh = lead.intent_score >= 70;
+    const isHigh = (lead.intent_score || 0) >= 70;
     const badgeClass = isHigh ? 'intent-high' : 'intent-med';
-    const badgeText = isHigh ? `🔥 ${lead.intent_score}% High Intent` : `💡 ${lead.intent_score}% Intent`;
+    const badgeText = isHigh ? `🔥 ${lead.intent_score}% High Match` : `💡 ${lead.intent_score}% Match`;
 
     const isEngaged = lead.status === 'engaged' || lead.status === 'dm_sent' || lead.status === 'converted';
+    const statusText = lead.status === 'converted' ? '🏆 CONVERTED' : (lead.status === 'engaged' ? '💬 REACHED OUT' : (lead.status === 'dm_sent' ? '✉️ DM SENT' : (lead.status === 'disqualified' ? '🚫 DISQUALIFIED' : '✨ NEW LEAD')));
     const statusClass = lead.status === 'converted' ? 'status-converted' : (isEngaged ? 'status-engaged' : (lead.status === 'disqualified' ? 'status-disqualified' : 'status-discovered'));
-    const statusText = lead.status === 'converted' ? '🏆 CONVERTED' : (lead.status === 'engaged' ? '💬 REACHED OUT' : (lead.status === 'dm_sent' ? '✉️ DM SENT' : (lead.status === 'disqualified' ? '🚫 DISQUALIFIED' : '📥 DISCOVERED')));
 
     const postAgeDays = lead.post_age_days !== undefined && lead.post_age_days !== null ? lead.post_age_days : 0;
-    const isWithin7Days = postAgeDays <= 7;
-    const postAgeBadge = isWithin7Days 
-      ? `<span class="badge-freshness fresh">⚡ Fresh (${escapeHtml(lead.post_time_text || '< 7d')})</span>`
-      : `<span class="badge-freshness old">⚠️ >7 Days Old</span>`;
-
-    const qualityBadge = lead.feedback === 'correct' 
-      ? `<span class="badge-quality verified">👍 Quality Lead</span>`
-      : (lead.feedback === 'incorrect' ? `<span class="badge-quality rejected">👎 Not a Lead</span>` : '');
-
-    // Prominent New Lead Tag
-    const isNewLead = (lead.status === 'discovered' && !lead.reached_out_at);
-    const newLeadBadge = isNewLead ? `<span class="badge-new-lead"><span class="pulse-dot"></span> ✨ NEW LEAD</span>` : '';
+    const freshness = postAgeDays <= 2 ? '⚡ Fresh (<48h)' : (postAgeDays <= 7 ? '🕒 This Week' : '⚠️ >7d Old');
 
     return `
-      <div class="lead-card ${isWithin7Days ? '' : 'lead-card-old'} ${lead.feedback === 'incorrect' ? 'card-disqualified' : ''} ${isNewLead ? 'card-is-new-lead' : ''}" id="lead-card-${lead.id}">
-        <!-- Lead Header -->
-        <div class="lead-header">
-          <div class="lead-author-box">
-            <div class="lead-avatar">${lead.author_name ? lead.author_name[0].toUpperCase() : 'U'}</div>
-            <div class="lead-author-meta">
-              <div class="author-title-row">
-                <strong>${escapeHtml(lead.author_name || 'Prospect')}</strong>
-                <span class="lead-handle">@${escapeHtml(lead.author_handle || 'user')}</span>
-                ${newLeadBadge}
-                ${postAgeBadge}
-                ${qualityBadge}
+      <div class="lead-card-clean" id="lead-card-${lead.id}">
+        <!-- Top Row: Icon, Author, Match Score & Status -->
+        <div class="lead-card-clean-top">
+          <div class="lead-card-clean-author">
+            <span style="font-size: 1.25rem;">${icon}</span>
+            <div>
+              <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">
+                ${escapeHtml(lead.author_name || 'Prospect')}
+                <span style="font-size: 0.78rem; color: #94a3b8; font-weight: normal; margin-left: 4px;">@${escapeHtml(lead.author_handle || 'user')}</span>
               </div>
-              <span class="lead-submeta">${icon} ${lead.platform.toUpperCase()} • Matched: "${escapeHtml(lead.keyword_matched || 'Agency & Marketing')}"</span>
+              <div style="font-size: 0.75rem; color: #94a3b8;">
+                ${lead.platform.toUpperCase()} • ${freshness}
+              </div>
             </div>
           </div>
-          <div class="lead-badges-right">
-            <div class="lead-intent-badge ${badgeClass}">${badgeText}</div>
-            <div class="lead-status-pill ${statusClass}">${statusText}</div>
+          <div style="display: flex; gap: 0.4rem; align-items: center;">
+            <span class="lead-intent-badge ${badgeClass}" style="font-size: 0.75rem; padding: 2px 8px;">${badgeText}</span>
+            <span class="lead-status-pill ${statusClass}" style="font-size: 0.72rem; padding: 2px 8px;">${statusText}</span>
           </div>
         </div>
 
-        <!-- Prominent Target Post Link Banner -->
-        <div class="lead-post-link-bar">
-          <div class="post-link-left">
-            <span class="link-icon">🔗</span>
-            <span class="link-label">Target Post:</span>
-            <a href="${escapeHtml(lead.post_url)}" target="_blank" rel="noopener noreferrer" class="direct-post-anchor" title="Open this exact post in new browser tab">
-              ${escapeHtml(cleanUrl(lead.post_url))}
-              <span class="external-icon">↗</span>
+        <!-- Prospect Inquiry Message / Post Content -->
+        <div class="lead-card-clean-post">
+          "${escapeHtml(lead.post_text || 'Active inquiry looking for solutions.')}"
+        </div>
+
+        <!-- AI Buying Signal Snippet -->
+        <div style="font-size: 0.8rem; color: #a5b4fc; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 6px;">
+          <span>🎯</span>
+          <span><strong>AI Buying Signal:</strong> ${escapeHtml(lead.intent_reason || 'Verified customer looking for help')}</span>
+        </div>
+
+        <!-- Collapsible Details for Power Users (Zero Clutter by Default) -->
+        <details style="margin-bottom: 0.75rem; font-size: 0.78rem; color: #94a3b8; background: rgba(0,0,0,0.2); border-radius: 6px; padding: 0.35rem 0.6rem;">
+          <summary style="cursor: pointer; font-weight: 600; color: #cbd5e1;">🔍 View Timestamps & Feedback Training</summary>
+          <div style="padding-top: 0.5rem; display: flex; flex-direction: column; gap: 0.35rem;">
+            <div>📅 <strong>Published:</strong> ${escapeHtml(lead.post_time_text || 'Recent')} (${postAgeDays <= 1 ? '<24h' : Math.round(postAgeDays) + 'd ago'})</div>
+            <div>⚡ <strong>Discovered:</strong> ${formatTimestamp(lead.discovered_at || lead.created_at)}</div>
+            ${lead.reached_out_at ? `<div>💬 <strong>Reached out:</strong> ${formatTimestamp(lead.reached_out_at)}</div>` : ''}
+            <div style="margin-top: 0.35rem; display: flex; align-items: center; gap: 6px;">
+              <span>Train AI:</span>
+              <button class="btn btn-xs ${lead.feedback === 'correct' ? 'btn-primary' : 'btn-ghost'}" onclick="rateLeadQuality(${lead.id}, 'correct')">👍 Correct Lead</button>
+              <button class="btn btn-xs ${lead.feedback === 'incorrect' ? 'btn-primary' : 'btn-ghost'}" onclick="rateLeadQuality(${lead.id}, 'incorrect')">👎 Not a Lead</button>
+            </div>
+          </div>
+        </details>
+
+        <!-- Clean Action Buttons: Clear, big, intuitive -->
+        <div class="lead-card-clean-actions">
+          <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+            <button class="btn btn-sm btn-primary" onclick="openActionModal(${lead.id}, 'engage')">
+              <span>💬 ${isEngaged ? 'Post Another Comment' : 'Send AI Reply'}</span>
+            </button>
+            <button class="btn btn-sm btn-secondary" onclick="openActionModal(${lead.id}, 'dm')">
+              <span>✉️ Send DM</span>
+            </button>
+            <a href="${escapeHtml(lead.post_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline">
+              <span>🔗 Open Post ↗</span>
             </a>
           </div>
-          <a href="${escapeHtml(lead.post_url)}" target="_blank" rel="noopener noreferrer" class="btn-visit-post">
-            Open Post Tab ↗
-          </a>
-        </div>
-
-        <!-- Timestamps Row: Post Published, Lead Discovered, Reached Out -->
-        <div class="lead-timestamps-bar">
-          <div class="timestamp-item" title="Publication time of the post on ${lead.platform}">
-            <span class="ts-icon">📅</span>
-            <div class="ts-text">
-              <span class="ts-label">Post Published</span>
-              <span class="ts-val ${isWithin7Days ? 'val-fresh' : 'val-expired'}">
-                ${escapeHtml(lead.post_time_text || 'Recent')} 
-                <small>(${postAgeDays <= 1 ? '< 24h old' : (Math.round(postAgeDays * 10) / 10) + 'd old'})</small>
-              </span>
-            </div>
-          </div>
-
-          <div class="timestamp-item" title="When our engine discovered and imported this lead">
-            <span class="ts-icon">⚡</span>
-            <div class="ts-text">
-              <span class="ts-label">Lead Discovered</span>
-              <span class="ts-val">${formatTimestamp(lead.discovered_at || lead.created_at)}</span>
-            </div>
-          </div>
-
-          <div class="timestamp-item ${lead.reached_out_at ? 'ts-reached' : 'ts-pending'}" title="When our agent commented or engaged with this lead">
-            <span class="ts-icon">${lead.reached_out_at ? '💬' : '⏳'}</span>
-            <div class="ts-text">
-              <span class="ts-label">Reached Out</span>
-              <span class="ts-val">${lead.reached_out_at ? formatTimestamp(lead.reached_out_at) : '<em class="text-dim">Not reached out yet</em>'}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Lead Quality Feedback & Training Bar -->
-        <div class="lead-quality-bar ${lead.feedback ? 'has-feedback' : ''}">
-          <div class="quality-label-box">
-            <span class="quality-title">🎯 Lead Quality:</span>
-            <span class="quality-hint">${lead.feedback === 'correct' ? '✅ Verified as Correct Lead. Similar patterns reinforced for future scans.' : (lead.feedback === 'incorrect' ? '⚠️ Marked as Not a Lead. Scraper learned negative pattern to exclude similar posts.' : 'Is this a qualified lead for your agency? Rate to train future AI filters:')}</span>
-          </div>
-          <div class="quality-btn-group">
-            <button class="btn-quality btn-quality-correct ${lead.feedback === 'correct' ? 'active' : ''}" onclick="rateLeadQuality(${lead.id}, 'correct')" title="Mark as Correct Lead (trains AI to hunt more like this)">
-              <span>👍 Correct Lead</span>
-            </button>
-            <button class="btn-quality btn-quality-incorrect ${lead.feedback === 'incorrect' ? 'active' : ''}" onclick="rateLeadQuality(${lead.id}, 'incorrect')" title="Mark as Not a Lead (trains AI to exclude similar posts)">
-              <span>👎 Not a Lead</span>
-            </button>
-            ${lead.feedback ? `
-              <button class="btn-quality-reset" onclick="rateLeadQuality(${lead.id}, 'reset')" title="Reset rating">
-                <span>↺ Reset</span>
+          <div style="display: flex; gap: 0.35rem; align-items: center;">
+            ${lead.status !== 'converted' ? `
+              <button class="btn btn-sm btn-outline text-emerald" onclick="markLeadStatus(${lead.id}, 'converted')" title="Mark as Converted Client">
+                <span>🏆 Won</span>
               </button>
-            ` : ''}
-          </div>
-        </div>
-
-        <!-- Verified Direct Comment Dispatched Banner -->
-        ${lead.last_comment_url ? `
-          <div class="verified-comment-banner">
-            <span class="verified-check">✅</span>
-            <div class="verified-text">
-              <strong>Verified Comment Dispatched:</strong> Commented directly on 
-              <a href="${escapeHtml(lead.last_comment_url)}" target="_blank" class="commented-url">${escapeHtml(cleanUrl(lead.last_comment_url))} ↗</a>
-              <span class="commented-time">at ${formatTimestamp(lead.reached_out_at || lead.updated_at)}</span>
-            </div>
-          </div>
-        ` : ''}
-
-        <!-- Original Post Inquiry Body -->
-        <div class="lead-post-text">${escapeHtml(lead.post_text || '')}</div>
-
-        <!-- AI Intent Rationale Box -->
-        <div class="lead-reasoning-box">
-          <strong>🧠 AI Buying Signal:</strong> ${escapeHtml(lead.intent_reason || 'Verified buyer inquiry')}
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="lead-actions">
-          <button class="btn btn-sm btn-primary" onclick="openActionModal(${lead.id}, 'engage')">
-            <span>💬 ${isEngaged ? 'Post Another Comment' : 'Review & Post AI Comment'}</span>
-          </button>
-          <button class="btn btn-sm btn-secondary" onclick="openActionModal(${lead.id}, 'dm')">
-            <span>✉️ ${lead.status === 'dm_sent' ? 'Send Follow-Up DM' : 'Draft & Send DM'}</span>
-          </button>
-          <a href="${escapeHtml(lead.post_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline">
-            <span>🔗 View on ${lead.platform}</span>
-          </a>
-          ${lead.status !== 'converted' ? `
-            <button class="btn btn-sm btn-outline text-emerald" onclick="markLeadStatus(${lead.id}, 'converted')">
-              <span>🏆 Mark Converted</span>
+            ` : `
+              <span style="color: #34d399; font-size: 0.78rem; font-weight: 700;">🎉 Client</span>
+            `}
+            <button class="btn btn-sm btn-outline text-danger" onclick="deleteSocialLead(${lead.id})" title="Delete lead">
+              <span>🗑️</span>
             </button>
-          ` : `
-            <span class="converted-tag">🎉 Converted Client</span>
-          `}
-          <button class="btn btn-sm btn-outline text-danger" onclick="deleteSocialLead(${lead.id})" title="Delete Lead">
-            <span>🗑️</span>
-          </button>
+          </div>
         </div>
       </div>
     `;
@@ -4502,3 +4438,596 @@ async function engageSingleSocialLead(leadId) {
     alert(`Failed to execute social engagement: ${err.message}`);
   }
 }
+
+// ==================== USER PROFILE & TEAM MANAGEMENT MODAL ====================
+
+function openProfileTeamModal() {
+  const modal = document.getElementById('modal-profile-team');
+  if (modal) modal.style.display = 'flex';
+  loadUserProfile();
+  loadTeamMembersModalList();
+}
+
+function closeProfileTeamModal() {
+  const modal = document.getElementById('modal-profile-team');
+  if (modal) modal.style.display = 'none';
+}
+
+function switchProfileModalTab(tab) {
+  const btnProfile = document.getElementById('tab-btn-my-profile');
+  const btnTeam = document.getElementById('tab-btn-team-mgmt');
+  const paneProfile = document.getElementById('pane-my-profile');
+  const paneTeam = document.getElementById('pane-team-mgmt');
+
+  if (tab === 'profile') {
+    if (btnProfile) btnProfile.classList.add('active');
+    if (btnTeam) btnTeam.classList.remove('active');
+    if (paneProfile) paneProfile.style.display = 'block';
+    if (paneTeam) paneTeam.style.display = 'none';
+  } else {
+    if (btnProfile) btnProfile.classList.remove('active');
+    if (btnTeam) btnTeam.classList.add('active');
+    if (paneProfile) paneProfile.style.display = 'none';
+    if (paneTeam) paneTeam.style.display = 'block';
+    loadTeamMembersModalList();
+  }
+}
+
+async function loadUserProfile() {
+  const usernameInput = document.getElementById('profile-username');
+  const emailInput = document.getElementById('profile-email');
+  if (usernameInput) usernameInput.value = currentUser?.username || 'admin';
+  if (emailInput && currentUser?.email) emailInput.value = currentUser.email;
+
+  try {
+    const res = await fetch('/api/profile');
+    if (res.ok) {
+      const data = await res.json();
+      if (emailInput && data.email) emailInput.value = data.email;
+      if (usernameInput && data.username) usernameInput.value = data.username;
+    }
+  } catch (err) {
+    console.warn('Could not load profile details:', err);
+  }
+}
+
+async function saveUserProfile(e) {
+  if (e) e.preventDefault();
+  const email = document.getElementById('profile-email')?.value?.trim();
+  const newPassword = document.getElementById('profile-new-password')?.value;
+  const statusDiv = document.getElementById('profile-save-status');
+
+  if (statusDiv) statusDiv.innerHTML = '<span style="color: #60a5fa;">Saving profile changes...</span>';
+
+  try {
+    const res = await fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, newPassword: newPassword || undefined })
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (statusDiv) statusDiv.innerHTML = '<span style="color: #34d399;">✅ Profile updated successfully!</span>';
+      showLeadNotificationToast('✅ Profile Saved', 'Your personal details were updated.');
+      if (currentUser && email) currentUser.email = email;
+      const passInput = document.getElementById('profile-new-password');
+      if (passInput) passInput.value = '';
+    } else {
+      if (statusDiv) statusDiv.innerHTML = `<span style="color: #ef4444;">Error: ${escapeHtml(data.error || 'Failed to update')}</span>`;
+    }
+  } catch (err) {
+    if (statusDiv) statusDiv.innerHTML = `<span style="color: #ef4444;">Network error: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+async function loadTeamMembersModalList() {
+  const container = document.getElementById('team-members-modal-list');
+  if (!container) return;
+
+  try {
+    const res = await fetch('/api/auth/users');
+    if (!res.ok) {
+      container.innerHTML = '<div class="text-dim" style="font-size: 0.85rem; padding: 0.5rem 0;">Only administrators can view team members.</div>';
+      return;
+    }
+    const data = await res.json();
+    const users = data.users || [];
+
+    if (users.length === 0) {
+      container.innerHTML = '<div class="text-dim" style="font-size: 0.85rem;">No other team members yet.</div>';
+      return;
+    }
+
+    container.innerHTML = users.map(u => {
+      const isSelf = u.id === currentUser?.id;
+      const roleBadge = u.role === 'admin' 
+        ? '<span class="user-role-chip role-admin" style="font-size: 0.68rem; padding: 2px 6px;">👑 Admin</span>' 
+        : '<span class="user-role-chip role-assigned" style="font-size: 0.68rem; padding: 2px 6px;">👤 Team Member</span>';
+
+      return `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.65rem 0.85rem; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; margin-bottom: 0.45rem;">
+          <div>
+            <div style="font-weight: 600; color: #fff; font-size: 0.85rem;">
+              ${escapeHtml(u.name || u.username)}
+              <span style="color: #94a3b8; font-size: 0.75rem; margin-left: 4px;">(@${escapeHtml(u.username)})</span>
+            </div>
+            <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">
+              ${u.email ? escapeHtml(u.email) : 'No email set'} • Added: ${u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Active'}
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            ${roleBadge}
+            ${!isSelf ? `
+              <button class="btn btn-xs btn-outline-danger" onclick="deleteTeamMemberFromModal(${u.id}, '${escapeHtml(u.username)}')" title="Remove access">✕</button>
+            ` : '<span style="font-size: 0.72rem; color: #94a3b8;">(You)</span>'}
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    container.innerHTML = `<div class="text-danger" style="font-size: 0.85rem;">Failed to load team list: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function addNewTeamMemberFromModal(e) {
+  if (e) e.preventDefault();
+  const username = document.getElementById('team-add-username')?.value?.trim();
+  const email = document.getElementById('team-add-email')?.value?.trim();
+  const password = document.getElementById('team-add-password')?.value;
+  const role = document.getElementById('team-add-role')?.value || 'user';
+  const statusDiv = document.getElementById('team-add-status');
+
+  if (!username || !password) {
+    alert('Username and password are required');
+    return;
+  }
+
+  if (statusDiv) statusDiv.innerHTML = '<span style="color: #60a5fa;">Creating account...</span>';
+
+  try {
+    const res = await fetch('/api/auth/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password, role, name: username })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      if (statusDiv) statusDiv.innerHTML = '<span style="color: #34d399;">✅ Team account created!</span>';
+      showLeadNotificationToast('✅ Team Account Added', `User @${username} can now sign in.`);
+      document.getElementById('team-add-username').value = '';
+      document.getElementById('team-add-email').value = '';
+      document.getElementById('team-add-password').value = '';
+      loadTeamMembersModalList();
+      if (typeof loadTeamUsers === 'function') loadTeamUsers();
+    } else {
+      if (statusDiv) statusDiv.innerHTML = `<span style="color: #ef4444;">${escapeHtml(data.error || 'Failed to create user')}</span>`;
+    }
+  } catch (err) {
+    if (statusDiv) statusDiv.innerHTML = `<span style="color: #ef4444;">Network error: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+async function deleteTeamMemberFromModal(id, username) {
+  if (!confirm(`Are you sure you want to delete access for team member @${username}?`)) return;
+  try {
+    const res = await fetch(`/api/auth/users/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showLeadNotificationToast('🗑️ Account Removed', `Removed @${username} from team.`);
+      loadTeamMembersModalList();
+      if (typeof loadTeamUsers === 'function') loadTeamUsers();
+    } else {
+      alert(data.error || 'Failed to delete user');
+    }
+  } catch (err) {
+    alert(`Failed to delete user: ${err.message}`);
+  }
+}
+
+// ==================== BULK DATA IMPORT & PURGE DEAD LEADS ====================
+
+function openBulkImportModal(targetType = 'maps') {
+  const modal = document.getElementById('modal-bulk-import');
+  const typeSelect = document.getElementById('bulk-target-type');
+  if (typeSelect) typeSelect.value = targetType;
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeBulkImportModal() {
+  const modal = document.getElementById('modal-bulk-import');
+  if (modal) modal.style.display = 'none';
+  const progress = document.getElementById('bulk-import-progress');
+  if (progress) progress.style.display = 'none';
+}
+
+function handleBulkFileSelect(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const textInput = document.getElementById('bulk-text-input');
+    if (textInput) textInput.value = event.target?.result || '';
+  };
+  reader.readAsText(file);
+}
+
+async function submitBulkImport() {
+  const textInput = document.getElementById('bulk-text-input');
+  const targetType = document.getElementById('bulk-target-type')?.value || 'maps';
+  const progressDiv = document.getElementById('bulk-import-progress');
+  const submitBtn = document.getElementById('btn-submit-bulk-import');
+
+  const text = textInput ? textInput.value.trim() : '';
+  if (!text) {
+    alert('Please paste lead rows or upload a CSV file first.');
+    return;
+  }
+
+  if (progressDiv) {
+    progressDiv.style.display = 'block';
+    progressDiv.style.background = 'rgba(99, 102, 241, 0.15)';
+    progressDiv.style.color = '#a5b4fc';
+    progressDiv.innerHTML = '⏳ Parsing CSV rows, enforcing country restrictions & calculating diagnostic opportunity scores...';
+  }
+  if (submitBtn) submitBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/leads/import-bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, targetType })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      if (progressDiv) {
+        progressDiv.style.background = 'rgba(16, 185, 129, 0.15)';
+        progressDiv.style.color = '#34d399';
+        progressDiv.innerHTML = `
+          ✅ <strong>Import Completed!</strong><br>
+          • Total Rows Processed: ${data.total || 0}<br>
+          • Successfully Scored & Imported: ${data.imported || 0}<br>
+          • Excluded (Restricted Countries): ${data.excluded || 0}<br>
+          • Uncontactable / Dead Leads: ${data.dead || 0}<br>
+          • Duplicates Skipped: ${data.duplicates || 0}
+        `;
+      }
+      showLeadNotificationToast('✅ Bulk Import Success', `Imported & scored ${data.imported || 0} high-value leads.`);
+      if (targetType === 'maps') {
+        loadMapsLeads();
+        loadMapsStats();
+      } else {
+        loadLeads();
+        loadStats();
+      }
+      setTimeout(() => {
+        closeBulkImportModal();
+        if (textInput) textInput.value = '';
+      }, 2500);
+    } else {
+      if (progressDiv) {
+        progressDiv.style.background = 'rgba(239, 68, 68, 0.15)';
+        progressDiv.style.color = '#f87171';
+        progressDiv.innerHTML = `⚠️ Error: ${escapeHtml(data.error || 'Failed to import')}`;
+      }
+    }
+  } catch (err) {
+    if (progressDiv) {
+      progressDiv.style.background = 'rgba(239, 68, 68, 0.15)';
+      progressDiv.style.color = '#f87171';
+      progressDiv.innerHTML = `Network error: ${escapeHtml(err.message)}`;
+    }
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+async function triggerPurgeDeadLeads(leadType = 'maps') {
+  const confirmMsg = '🗑️ Are you sure you want to purge dead leads?\n\nThis will remove uncontactable leads that have no phone number, no direct email, and no valid website from your pipeline to keep your CRM 100% clean.';
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const res = await fetch('/api/leads/purge-dead', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ leadType })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showLeadNotificationToast('🧹 Dead Leads Purged', `Removed ${data.purgedCount || 0} dead leads from pipeline.`);
+      appendTerminalLog(`🧹 Purge complete: ${data.purgedCount || 0} dead leads removed. Pipeline is 100% clean.`, 'text-emerald');
+      if (leadType === 'maps') {
+        loadMapsLeads();
+        loadMapsStats();
+      } else {
+        loadLeads();
+        loadStats();
+      }
+    } else {
+      alert(`Purge notice: ${data.error || data.message}`);
+    }
+  } catch (err) {
+    alert(`Failed to execute purge: ${err.message}`);
+  }
+}
+
+// ==================== COMMUNITY GROUPS HUB (FACEBOOK & LINKEDIN) ====================
+
+let currentGroupSubTab = 'discovered';
+let allDiscoveredGroups = [];
+let allJoinedGroups = [];
+
+function switchGroupSubTab(tab) {
+  currentGroupSubTab = tab;
+  const btnDiscovered = document.getElementById('tab-btn-groups-discovered');
+  const btnJoined = document.getElementById('tab-btn-groups-joined');
+  const btnAssistant = document.getElementById('tab-btn-groups-assistant');
+  const container = document.getElementById('groups-container');
+  const assistantView = document.getElementById('groups-assistant-view');
+
+  [btnDiscovered, btnJoined, btnAssistant].forEach(b => b?.classList.remove('active'));
+
+  if (tab === 'discovered') {
+    if (btnDiscovered) btnDiscovered.classList.add('active');
+    if (container) container.style.display = 'grid';
+    if (assistantView) assistantView.style.display = 'none';
+    renderDiscoveredGroupsCards();
+  } else if (tab === 'joined') {
+    if (btnJoined) btnJoined.classList.add('active');
+    if (container) container.style.display = 'grid';
+    if (assistantView) assistantView.style.display = 'none';
+    auditGroupsFromUi();
+  } else if (tab === 'assistant') {
+    if (btnAssistant) btnAssistant.classList.add('active');
+    if (container) container.style.display = 'none';
+    if (assistantView) assistantView.style.display = 'block';
+  }
+}
+
+async function loadDiscoveredGroups() {
+  if (allDiscoveredGroups.length === 0) {
+    searchGroupsFromUi();
+  }
+}
+
+async function searchGroupsFromUi() {
+  const topic = document.getElementById('groups-search-topic')?.value?.trim() || 'local business clinic owners and medspa';
+  const platform = document.getElementById('groups-platform-select')?.value || 'facebook';
+  const container = document.getElementById('groups-container');
+  const countBadge = document.getElementById('count-groups-discovered');
+
+  if (container) {
+    container.innerHTML = `
+      <div class="empty-state" style="grid-column: 1 / -1; padding: 3rem 1rem;">
+        <div class="spinner" style="width: 32px; height: 32px; margin: 0 auto 1rem auto; border: 3px solid rgba(255,255,255,0.1); border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+        <h3>Searching ${platform === 'facebook' ? 'Facebook' : 'LinkedIn'} for Active Communities...</h3>
+        <p style="color: #94a3b8;">Scanning member activity, post velocity, and admin rules for "${escapeHtml(topic)}"...</p>
+      </div>
+    `;
+  }
+
+  try {
+    const res = await fetch('/api/groups/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, platform })
+    });
+    const data = await res.json();
+    allDiscoveredGroups = data.groups || [];
+    if (countBadge) countBadge.innerText = allDiscoveredGroups.length;
+    renderDiscoveredGroupsCards();
+  } catch (err) {
+    if (container) {
+      container.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1; color: #ef4444;">Failed to search groups: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+}
+
+function renderDiscoveredGroupsCards() {
+  const container = document.getElementById('groups-container');
+  if (!container) return;
+
+  if (allDiscoveredGroups.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state" style="grid-column: 1 / -1;">
+        <div class="empty-icon">👥</div>
+        <h3>No Groups Found for this Keyword</h3>
+        <p>Try searching for broader keywords like <em>"dental owners"</em>, <em>"realtors"</em>, or <em>"ecommerce founders"</em>.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = allDiscoveredGroups.map(g => {
+    const platformIcon = g.platform === 'facebook' ? '👥 Facebook' : '💼 LinkedIn';
+    return `
+      <div class="group-card">
+        <div class="group-header">
+          <div class="group-name">${escapeHtml(g.name)}</div>
+          <span class="user-role-chip role-assigned" style="font-size: 0.7rem;">${platformIcon}</span>
+        </div>
+        
+        <div class="group-meta-chips">
+          <span class="group-chip chip-active">🟢 Active Velocity</span>
+          <span class="group-chip">👥 ${escapeHtml(g.members_count || '10k+')} members</span>
+          <span class="group-chip">📝 ${escapeHtml(g.posts_per_day || '15+')} posts/day</span>
+        </div>
+
+        <div class="admin-rules-box">
+          <strong style="color: #f59e0b;">🛡️ Admin Rules & Ban Safety:</strong>
+          <div style="margin-top: 4px; line-height: 1.4;">${escapeHtml(g.admin_rules || 'No spam, no direct links in posts. Value-first discussion only.')}</div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; gap: 0.5rem;">
+          <a href="${escapeHtml(g.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline" style="flex: 1; text-align: center;">
+            Open Group ↗
+          </a>
+          <button class="btn btn-sm btn-primary" onclick="prepareRulesAssistant('${escapeHtml(g.name).replace(/'/g, "\\'")}', '${escapeHtml(g.admin_rules || '').replace(/'/g, "\\'")}')" style="flex: 1;">
+            ✨ Safe Playbook
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function auditGroupsFromUi() {
+  const platform = document.getElementById('groups-platform-select')?.value || 'facebook';
+  const container = document.getElementById('groups-container');
+  const countBadge = document.getElementById('count-groups-joined');
+
+  if (container) {
+    container.innerHTML = `
+      <div class="empty-state" style="grid-column: 1 / -1; padding: 3rem 1rem;">
+        <div class="spinner" style="width: 32px; height: 32px; margin: 0 auto 1rem auto; border: 3px solid rgba(255,255,255,0.1); border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+        <h3>Auditing Joined Groups for Inactivity...</h3>
+        <p style="color: #94a3b8;">Checking last post timestamps and member interaction rates...</p>
+      </div>
+    `;
+  }
+
+  try {
+    const res = await fetch('/api/groups/audit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ platform })
+    });
+    const data = await res.json();
+    allJoinedGroups = data.groups || [];
+    if (countBadge) countBadge.innerText = allJoinedGroups.length;
+    renderJoinedGroupsCards();
+  } catch (err) {
+    if (container) {
+      container.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1; color: #ef4444;">Failed to audit groups: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+}
+
+function renderJoinedGroupsCards() {
+  const container = document.getElementById('groups-container');
+  if (!container) return;
+
+  if (allJoinedGroups.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state" style="grid-column: 1 / -1;">
+        <div class="empty-icon">🧹</div>
+        <h3>All Joined Groups are Active & Healthy!</h3>
+        <p>No dead or silent groups detected (>30 days inactive).</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = allJoinedGroups.map(g => {
+    const isSilent = Boolean(g.is_silent || (g.days_inactive && g.days_inactive > 30));
+    return `
+      <div class="group-card" style="${isSilent ? 'border-color: rgba(239, 68, 68, 0.4);' : ''}">
+        <div class="group-header">
+          <div class="group-name">${escapeHtml(g.name)}</div>
+          <span class="user-role-chip role-assigned" style="font-size: 0.7rem;">${g.platform.toUpperCase()}</span>
+        </div>
+
+        <div class="group-meta-chips">
+          ${isSilent 
+            ? `<span class="group-chip chip-silent">⚠️ Silent >${g.days_inactive || 30} Days (Dead Group)</span>` 
+            : `<span class="group-chip chip-active">🟢 Active Community</span>`}
+          <span class="group-chip">Joined: ${escapeHtml(g.joined_at || 'Recent')}</span>
+        </div>
+
+        <div style="font-size: 0.82rem; color: #cbd5e1; margin-bottom: 0.85rem;">
+          ${isSilent ? 'This group has been dead silent for over a month. Removing it keeps your feed and algorithm signals clean.' : 'Active discussions happening regularly.'}
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+          <a href="${escapeHtml(g.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline" style="flex: 1; text-align: center;">
+            Open Group ↗
+          </a>
+          ${isSilent ? `
+            <button class="btn btn-sm btn-outline-danger" onclick="leaveGroupFromUi(${g.id}, '${escapeHtml(g.name).replace(/'/g, "\\'")}')" style="flex: 1;">
+              🗑️ Leave & Remove
+            </button>
+          ` : `
+            <span style="font-size: 0.78rem; color: #34d399; font-weight: 600;">✓ Retain</span>
+          `}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function leaveGroupFromUi(id, name) {
+  if (!confirm(`Are you sure you want to leave and remove dead group "${name}"?`)) return;
+
+  try {
+    const res = await fetch(`/api/groups/${id}/leave`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (data.success) {
+      showLeadNotificationToast('🧹 Left Group', `Removed "${name}" from joined groups.`);
+      allJoinedGroups = allJoinedGroups.filter(g => g.id !== id);
+      renderJoinedGroupsCards();
+      const countBadge = document.getElementById('count-groups-joined');
+      if (countBadge) countBadge.innerText = allJoinedGroups.length;
+    } else {
+      alert(`Could not leave group: ${data.error || data.message}`);
+    }
+  } catch (err) {
+    alert(`Failed to leave group: ${err.message}`);
+  }
+}
+
+function prepareRulesAssistant(groupName, rules) {
+  switchGroupSubTab('assistant');
+  const rulesInput = document.getElementById('group-rules-text');
+  if (rulesInput && rules) rulesInput.value = rules;
+  const postInput = document.getElementById('group-post-text');
+  if (postInput) postInput.focus();
+}
+
+async function generateSafeGroupResponseFromUi() {
+  const postText = document.getElementById('group-post-text')?.value?.trim();
+  const authorName = document.getElementById('group-author-name')?.value?.trim() || 'Colleague';
+  const groupRules = document.getElementById('group-rules-text')?.value?.trim() || 'No direct promo links, value-first advice only';
+  const resultDiv = document.getElementById('group-response-result');
+  const responseTextArea = document.getElementById('group-response-text');
+
+  if (!postText) {
+    alert('Please paste the member inquiry post first.');
+    return;
+  }
+
+  if (resultDiv) resultDiv.style.display = 'block';
+  if (responseTextArea) responseTextArea.value = '⏳ Reasoning through group rules and synthesizing high-authority, ban-safe advice...';
+
+  try {
+    const res = await fetch('/api/groups/generate-response', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postText, authorName, groupRules })
+    });
+    const data = await res.json();
+    if (data.success && data.response) {
+      if (responseTextArea) responseTextArea.value = data.response;
+      showLeadNotificationToast('✨ Response Synthesized', 'Admin-safe advice generated.');
+    } else {
+      if (responseTextArea) responseTextArea.value = `Error: ${data.error || 'Failed to synthesize response'}`;
+    }
+  } catch (err) {
+    if (responseTextArea) responseTextArea.value = `Network error: ${err.message}`;
+  }
+}
+
+async function copyGroupResponseAndToast() {
+  const text = document.getElementById('group-response-text')?.value;
+  if (!text) return;
+  const success = await copyToClipboard(text);
+  if (success) {
+    showLeadNotificationToast('📋 Copied to Clipboard', 'Ready to paste in the group discussion!');
+  } else {
+    alert('Failed to copy to clipboard.');
+  }
+}
+

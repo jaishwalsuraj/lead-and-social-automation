@@ -150,7 +150,8 @@ Best regards,
 
 ${FOUNDER_NAME}
 Founder, ${AGENCY_NAME} | Medical AI & Patient Growth Engine
-WhatsApp: +1 (512) 717-3147 | hello@surajjaiswal.com`;
+Calendar: ${TOPMATE_URL}
+Email: hello@surajjaiswal.com`;
 
     // 6. Clean WhatsApp Direct Message
     const cleanWhatsappPitch = `Hello ${salutation}! I reviewed ${lead.business_name} on Google Maps in ${lead.city || 'your area'} (${rating}⭐). We prepared a complimentary 2-min Digital Patient Acquisition & Video Audit for your clinic: ${publicScorecardUrl} — Would love to share a 3-min AI Avatar demo if you are open to it!`;
