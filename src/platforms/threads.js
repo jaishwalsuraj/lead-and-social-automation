@@ -347,7 +347,11 @@ export class ThreadsAdapter {
 
       if (isDraftStillPresent) {
         console.log('[Threads] Comment text still in composer; sending keyboard submission shortcut...');
-        await page.click(inputSelector).catch(() => {});
+        if (targetInput) {
+          await targetInput.click().catch(() => {});
+        } else {
+          await page.click('div[role="textbox"], div[contenteditable="true"]').catch(() => {});
+        }
         await page.keyboard.press('Meta+Enter');
         await browserManager.humanDelay(800, 1200);
         await page.keyboard.press('Control+Enter');

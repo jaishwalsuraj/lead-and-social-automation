@@ -62,15 +62,19 @@ export class BulkLeadImporter {
     const getVal = (...keys) => {
       for (const k of keys) {
         for (const rowKey of Object.keys(row)) {
-          if (rowKey === k || rowKey.includes(k)) {
-            if (row[rowKey]) return row[rowKey];
+          const rk = rowKey.toLowerCase().trim();
+          const target = k.toLowerCase().trim();
+          if (rk === target || rk.includes(target) || target.includes(rk)) {
+            if (row[rowKey] !== undefined && row[rowKey] !== null && String(row[rowKey]).trim() !== '') {
+              return String(row[rowKey]).trim();
+            }
           }
         }
       }
       return '';
     };
 
-    const business_name = getVal('business_name', 'company', 'name', 'title', 'practice', 'clinic');
+    const business_name = getVal('business', 'business_name', 'company', 'name', 'title', 'practice', 'clinic');
     const phone = getVal('phone', 'tel', 'mobile', 'contact_number');
     const email = getVal('email', 'mail', 'contact_email');
     const website_url = getVal('website', 'site', 'domain', 'url', 'web');
