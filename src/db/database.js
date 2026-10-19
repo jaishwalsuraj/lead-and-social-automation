@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import crypto from 'crypto';
+import { checkCountryExclusion } from '../utils/countryFilter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -572,8 +573,15 @@ export const LeadModel = {
 
     lead.discovered_at = lead.discovered_at || new Date().toISOString();
     lead.reached_out_at = lead.reached_out_at || (['engaged', 'dm_sent', 'converted'].includes(lead.status) ? new Date().toISOString() : null);
-    lead.last_comment_url = lead.last_comment_url || (['engaged', 'dm_sent'].includes(lead.status) ? lead.post_url : null);
-    lead.last_dm = lead.last_dm || null;
+    // Strict country policy check: exclude Bangladesh, Pakistan, Bhutan, Nepal, etc.
+    const countryCheck = checkCountryExclusion({
+      text: `${lead.author_handle || ''} ${lead.author_name || ''} ${lead.post_text || lead.post_content || ''}`,
+      url: lead.post_url
+    });
+    if (countryCheck.excluded) {
+      LogModel.add('security', 'lead_blocked_country_policy', `Excluded territory lead dropped: ${countryCheck.reason}`);
+      return { lastInsertRowid: null, isExcluded: true };
+    }
 
     // Strict duplicate check: by author_handle on same platform, OR by post_url
     const cleanHandle = (lead.author_handle || '').trim().toLowerCase();
@@ -997,6 +1005,19 @@ export const LeadModel = {
 
 export const GoogleMapsLeadModel = {
   create: (lead) => {
+    // Strict country policy check: exclude Bangladesh, Pakistan, Bhutan, Nepal, etc.
+    const countryCheck = checkCountryExclusion({
+      text: lead.business_name,
+      city: lead.city,
+      address: lead.address,
+      phone: lead.phone,
+      url: lead.website_url
+    });
+    if (countryCheck.excluded) {
+      LogModel.add('security', 'maps_lead_blocked_country_policy', `Excluded territory Maps lead dropped: ${lead.business_name} (${countryCheck.reason})`);
+      return { lastInsertRowid: null, isExcluded: true };
+    }
+
     const stmt = db.prepare(`
       INSERT INTO google_maps_leads (
         business_name, category, phone, email, whatsapp_url, address, city, state,

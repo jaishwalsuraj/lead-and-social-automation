@@ -586,9 +586,13 @@
             </select>
             <input type="text" id="maps-search-input" placeholder="🔍 Search business name, city, phone, email..." oninput="debounceMapsSearch()" class="maps-search-box">
           </div>
-          <div class="maps-filters-right">
+          <div class="maps-filters-right" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
             <span class="maps-results-counter" id="maps-results-count">0 leads found</span>
-            <button class="btn btn-sm btn-outline-call" id="btn-maps-reverify-all" onclick="triggerBatchReverify()" title="Deep scan all existing leads to verify websites and hunt missing phone/email contact details">⚡ Re-Verify All Leads</button>
+            <button class="btn btn-sm btn-primary" onclick="openReachInboxModal()" title="Push verified email leads to ReachInbox cold outreach campaign">🚀 Sync ReachInbox</button>
+            <button class="btn btn-sm btn-outline" onclick="exportReachInboxCsv()" title="Download CSV pre-formatted for ReachInbox with clean Scorecard links">📥 Export ReachInbox CSV</button>
+            <button class="btn btn-sm btn-outline" onclick="triggerAutoScorecards()" title="Automatically generate interactive scorecards & clean email links for all leads">📋 Auto-Scorecard All</button>
+            <button class="btn btn-sm btn-outline-call" onclick="triggerAutoSocialEngagement()" title="Execute safe engagement pipeline: Like recent post -> Expert comment -> DM with scorecard">📱 Auto-Engage Socials</button>
+            <button class="btn btn-sm btn-outline" id="btn-maps-reverify-all" onclick="triggerBatchReverify()" title="Deep scan all existing leads to verify websites and hunt missing contact details">⚡ Re-Verify All</button>
             <button class="btn btn-sm btn-outline" onclick="loadMapsLeads()">↻ Refresh</button>
           </div>
         </div>
@@ -852,6 +856,135 @@
 
             <button type="submit" class="btn btn-primary">Save Settings</button>
           </form>
+        </div>
+
+        <!-- ReachInbox Cold Email Outreach Integration -->
+        <div class="panel-card mb-4" id="section-reachinbox-settings" style="border: 1px solid rgba(59, 130, 246, 0.35); background: linear-gradient(135deg, rgba(30, 58, 138, 0.25) 0%, rgba(15, 23, 42, 0.6) 100%); margin-bottom: 1.5rem; padding: 1.5rem; border-radius: 14px;">
+          <div class="panel-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.25rem;">✉️</span>
+                <h3 style="margin: 0; font-size: 1.15rem; color: #fff;">ReachInbox Cold Outreach (Email) Integration</h3>
+              </div>
+              <p class="text-muted" style="margin: 0.35rem 0 0 0; font-size: 0.88rem;">
+                Connect ReachInbox to automatically dispatch high-converting cold email sequences with clean, personalized diagnostic scorecard links.
+              </p>
+            </div>
+            <span class="badge" id="reachinbox-status-badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.8rem;">
+              ● ReachInbox API Ready
+            </span>
+          </div>
+
+          <form id="reachinbox-form" onsubmit="saveReachInboxSettings(event)">
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div class="form-group">
+                <label for="reachinbox-api-key">ReachInbox API Key</label>
+                <input type="password" id="reachinbox-api-key" placeholder="Enter ReachInbox API Key (from Settings > Integrations > API)">
+                <small class="form-hint">Obtain from your logged-in ReachInbox workspace: <em>Settings → Integrations → API</em>.</small>
+              </div>
+              <div class="form-group">
+                <label for="reachinbox-campaign-id">Target Campaign ID</label>
+                <input type="text" id="reachinbox-campaign-id" placeholder="e.g. cmp_9a8b7c6d5e">
+                <small class="form-hint">Campaign ID in ReachInbox where newly discovered doctor/business emails should be routed.</small>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 0.75rem; display: flex; align-items: center; gap: 0.65rem;">
+              <input type="checkbox" id="reachinbox-auto-sync" style="width: 18px; height: 18px; cursor: pointer;">
+              <label for="reachinbox-auto-sync" style="cursor: pointer; font-size: 0.9rem; font-weight: 500;">
+                ⚡ Auto-Sync Mode: Automatically add new Google Maps leads with verified emails into ReachInbox campaign on discovery.
+              </label>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; margin-top: 1.25rem;">
+              <button type="submit" class="btn btn-primary">Save ReachInbox Settings</button>
+              <button type="button" class="btn btn-outline" onclick="testReachInboxConnection()">🔌 Test Connection</button>
+              <button type="button" class="btn btn-outline" onclick="exportReachInboxCsv()">📥 Export ReachInbox CSV</button>
+            </div>
+            <div id="reachinbox-test-result" style="margin-top: 0.75rem; font-size: 0.85rem;"></div>
+          </form>
+        </div>
+
+        <!-- Social Media Engagement Pipeline & Fixed-Time Scheduler -->
+        <div class="panel-card mb-4" id="section-social-automation" style="border: 1px solid rgba(16, 185, 129, 0.35); background: linear-gradient(135deg, rgba(6, 78, 59, 0.25) 0%, rgba(15, 23, 42, 0.6) 100%); margin-bottom: 1.5rem; padding: 1.5rem; border-radius: 14px;">
+          <div class="panel-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.25rem;">📱</span>
+                <h3 style="margin: 0; font-size: 1.15rem; color: #fff;">Social Media Automated Engagement Pipeline & Scheduler</h3>
+              </div>
+              <p class="text-muted" style="margin: 0.35rem 0 0 0; font-size: 0.88rem;">
+                Engage leads on Instagram & social channels: <strong>1. Like recent post</strong> → <strong>2. Post expert comment</strong> → <strong>3. Send DM with clean Scorecard link</strong>, while keeping all platform policies intact.
+              </p>
+            </div>
+            <span class="badge" id="social-scheduler-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.8rem;">
+              ● Automation Active (10:00 AM & 3:00 PM)
+            </span>
+          </div>
+
+          <form id="social-automation-form" onsubmit="saveSocialAutomationSettings(event)">
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div class="form-group">
+                <label for="social-schedule-times">Fixed Automation Times (Comma Separated)</label>
+                <input type="text" id="social-schedule-times" value="10:00, 15:00" placeholder="10:00, 15:00">
+                <small class="form-hint">24-hour format (e.g. <code>10:00, 15:00</code> for 10:00 AM and 3:00 PM daily).</small>
+              </div>
+              <div class="form-group">
+                <label for="social-daily-likes">Daily Like Safety Cap</label>
+                <input type="number" id="social-daily-likes" value="25" min="5" max="50">
+                <small class="form-hint">Prevents algorithmic flags by capping total likes per 24 hours.</small>
+              </div>
+            </div>
+
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.75rem;">
+              <div class="form-group">
+                <label for="social-daily-comments">Daily Comment Safety Cap</label>
+                <input type="number" id="social-daily-comments" value="15" min="3" max="30">
+                <small class="form-hint">Maximum authoritative expert comments per day across prospects.</small>
+              </div>
+              <div class="form-group">
+                <label for="social-daily-dms">Daily DM Safety Cap</label>
+                <input type="number" id="social-daily-dms" value="10" min="2" max="25">
+                <small class="form-hint">Maximum 1-on-1 direct messages sent per day with Scorecard links.</small>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 0.75rem; display: flex; align-items: center; gap: 0.65rem;">
+              <input type="checkbox" id="social-auto-enabled" checked style="width: 18px; height: 18px; cursor: pointer;">
+              <label for="social-auto-enabled" style="cursor: pointer; font-size: 0.9rem; font-weight: 500;">
+                Enable Automated Fixed-Time Social Engagement Schedule
+              </label>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; margin-top: 1.25rem;">
+              <button type="submit" class="btn btn-primary">Save Social Automation Config</button>
+              <button type="button" class="btn btn-outline-call" onclick="triggerAutoSocialEngagement()">🚀 Run Engagement Batch Now</button>
+            </div>
+            <div id="social-auto-status" style="margin-top: 0.75rem; font-size: 0.85rem;"></div>
+          </form>
+        </div>
+
+        <!-- Strict Currency & Market Targeting Policy Banner -->
+        <div class="panel-card mb-4" style="border: 1px solid rgba(245, 158, 11, 0.35); background: linear-gradient(135deg, rgba(120, 53, 15, 0.25) 0%, rgba(15, 23, 42, 0.6) 100%); margin-bottom: 1.5rem; padding: 1.5rem; border-radius: 14px;">
+          <div style="display: flex; align-items: flex-start; gap: 1rem;">
+            <div style="font-size: 2rem;">🛡️</div>
+            <div>
+              <h3 style="margin: 0; font-size: 1.1rem; color: #fbbf24;">Strict High-Value Targeting & Excluded Countries Policy</h3>
+              <p style="margin: 0.4rem 0 0.75rem 0; font-size: 0.88rem; color: #e2e8f0; line-height: 1.5;">
+                To maximize client deal size and ensure high purchasing power, our outreach engine strictly excludes low-currency and non-target territories:
+              </p>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">⛔ Bangladesh (+880, .bd)</span>
+                <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">⛔ Pakistan (+92, .pk)</span>
+                <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">⛔ Bhutan (+975, .bt)</span>
+                <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">⛔ Nepal (+977, .np)</span>
+                <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">⛔ Sri Lanka (+94, .lk)</span>
+              </div>
+              <p style="margin: 0.65rem 0 0 0; font-size: 0.82rem; color: #94a3b8;">
+                ✓ Automatic filters silently reject leads matching these dial codes, city names, or domain extensions at scraping, import, and database levels.
+              </p>
+            </div>
+          </div>
         </div>
 
         <!-- Super Admin Security & Password Change -->
@@ -1526,6 +1659,40 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeScorecardDetailModal()">Close</button>
+      </div>
+    </div>
+  <!-- Modal: Sync Leads to ReachInbox Campaign -->
+  <div class="modal-overlay" id="modal-reachinbox-sync" style="display: none;">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <h3>🚀 Sync Leads to ReachInbox Cold Outreach</h3>
+          <p class="modal-meta">Pushes verified email leads with clean custom diagnostic scorecard links.</p>
+        </div>
+        <button class="modal-close" onclick="closeReachInboxModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 10px; padding: 1rem; margin-bottom: 1.25rem;">
+          <div style="font-weight: 700; color: #60a5fa; font-size: 0.95rem;">Target Campaign in ReachInbox</div>
+          <div style="font-size: 0.82rem; color: #94a3b8; margin: 0.25rem 0 0.75rem 0;">Confirm or override the ReachInbox campaign ID to route these leads to:</div>
+          <input type="text" id="reachinbox-sync-campaign-id" placeholder="e.g. cmp_9a8b7c6d5e" class="login-input" style="background: rgba(15, 23, 42, 0.8);">
+        </div>
+
+        <div style="font-size: 0.9rem; color: #e2e8f0; margin-bottom: 0.75rem;">
+          <span>Target Batch: </span><strong id="reachinbox-sync-count">All Verified Email Leads</strong>
+        </div>
+
+        <div style="font-size: 0.82rem; color: #94a3b8; line-height: 1.5; margin-bottom: 1rem;">
+          ✓ Injects personalized <strong>{{scorecard_url}}</strong> (clean 2-minute diagnostic audit)<br>
+          ✓ Maps <strong>{{first_name}}</strong>, <strong>{{company}}</strong>, <strong>{{city}}</strong>, and <strong>{{topmate_url}}</strong><br>
+          ✓ Never sends cluttered ASCII tables or raw JSON — prospects receive clean, human-written cold emails.
+        </div>
+
+        <div id="reachinbox-sync-progress" style="display: none; padding: 0.75rem; border-radius: 8px; font-size: 0.85rem;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeReachInboxModal()">Cancel</button>
+        <button class="btn btn-primary" id="btn-submit-reachinbox-sync" onclick="submitReachInboxSync()">🚀 Sync to ReachInbox Now</button>
       </div>
     </div>
   </div>

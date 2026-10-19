@@ -1,6 +1,8 @@
 import { chromium } from 'playwright';
 import { GoogleMapsLeadModel, LogModel, SettingsModel } from '../db/database.js';
 import { NICHE_REGISTRY, detectNiche } from '../agent/scorecardEngine.js';
+import { checkCountryExclusion, validateSearchTargeting } from '../utils/countryFilter.js';
+import { MapsScorecardBridge } from '../agent/mapsScorecardBridge.js';
 
 export class GoogleMapsAdapter {
   constructor() {
@@ -15,6 +17,14 @@ export class GoogleMapsAdapter {
     if (this.isScanning) {
       return { success: false, message: 'Google Maps scan already running' };
     }
+
+    // 1. Strict Targeting Policy Check (Excludes Bangladesh, Pakistan, Bhutan, Nepal, etc.)
+    const targetCheck = validateSearchTargeting(query, location);
+    if (!targetCheck.allowed) {
+      LogModel.add(this.platform, 'targeting_blocked', targetCheck.error);
+      return { success: false, error: targetCheck.error };
+    }
+
     this.isScanning = true;
 
     const fullQuery = location ? `${query} in ${location}` : query;
@@ -119,6 +129,20 @@ export class GoogleMapsAdapter {
             continue;
           }
 
+          // 2. Strict Country Policy Check: Exclude Bangladesh, Pakistan, Bhutan, Nepal, etc.
+          const countryCheck = checkCountryExclusion({
+            text: enriched.business_name,
+            city: enriched.city,
+            address: enriched.address,
+            phone: enriched.phone,
+            url: enriched.website_url
+          });
+          if (countryCheck.excluded) {
+            console.log(`[GoogleMaps] ⛔ DROPPED lead "${candidate.name}": ${countryCheck.reason}`);
+            LogModel.add(this.platform, 'lead_skipped_country_policy', `Dropped lead "${candidate.name}" from ${countryCheck.country || 'excluded territory'}: ${countryCheck.reason}`);
+            continue;
+          }
+
           // Filter by No Website if requested
           if (noWebsiteOnly && enriched.has_website) {
             console.log(`[GoogleMaps] Skipping "${candidate.name}": has verified website (${enriched.website_url}) and noWebsiteOnly is enabled.`);
@@ -139,6 +163,19 @@ export class GoogleMapsAdapter {
             console.log(`[GoogleMaps] DROPPED uncontactable listing "${candidate.name}" (No phone, no email, no socials)`);
             LogModel.add(this.platform, 'lead_skipped_no_contact', `Dropped uncontactable listing "${candidate.name}" - without contact details it cannot be pitched.`);
             continue;
+          }
+
+          // Automatically generate Diagnostic Scorecard & Clean Email Pitch
+          try {
+            const scResult = MapsScorecardBridge.generateScorecardForMapsLead(enriched);
+            if (scResult) {
+              enriched.ai_email_pitch = scResult.cleanEmailPitch;
+              enriched.ai_whatsapp_pitch = scResult.cleanWhatsappPitch;
+              enriched.doctor_prescription = scResult.cleanEmailPitch;
+              enriched.opportunity_summary = `Scorecard #${scResult.scorecardId}: ${scResult.overallScore}/100. Video: ${scResult.scores.videoScore}/100. Audit URL: ${scResult.publicScorecardUrl}`;
+            }
+          } catch (scErr) {
+            console.warn('[GoogleMaps] Error auto-generating scorecard for lead:', scErr.message);
           }
 
           // Save high-value contactable lead

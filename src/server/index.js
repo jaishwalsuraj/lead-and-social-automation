@@ -18,6 +18,10 @@ import { leadVerifier } from '../agent/leadVerifier.js';
 import { ScorecardEngine, scorecardQuestions } from '../agent/scorecardEngine.js';
 import { ScorecardPdfGenerator } from '../agent/pdfGenerator.js';
 import { tunnelManager } from './tunnelManager.js';
+import { MapsScorecardBridge } from '../agent/mapsScorecardBridge.js';
+import { ReachInboxClient } from '../agent/reachInboxClient.js';
+import { socialEngagementEngine } from '../agent/socialEngagementEngine.js';
+import { checkCountryExclusion, validateSearchTargeting } from '../utils/countryFilter.js';
 
 import { loginRateLimiter, forgotPwRateLimiter, resetPwRateLimiter, publicApiRateLimiter, applySecurityHeaders, isPathSafe } from './security.js';
 
@@ -696,6 +700,11 @@ app.post('/api/maps/scan', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Business category or keyword is required' });
   }
 
+  const targetCheck = validateSearchTargeting(query, location || '');
+  if (!targetCheck.allowed) {
+    return res.status(400).json({ error: targetCheck.error });
+  }
+
   orchestrator.broadcast('log', {
     platform: 'google_maps',
     text: `📍 Starting Google Maps hunt: "${query}" in "${location || 'Local'}" (${noWebsiteOnly ? '🔥 NO WEBSITE ONLY' : 'All Listings'})...`
@@ -889,6 +898,149 @@ app.post('/api/maps/reverify-all', requireAuth, (req, res) => {
   res.json({ success: true, message: 'Batch re-verification started in background' });
 });
 
+// ==================== REACHINBOX & COLD EMAIL OUTREACH ROUTES ====================
+
+// Get ReachInbox configuration (API Key & Campaign ID)
+app.get('/api/reachinbox/config', requireAuth, (req, res) => {
+  const apiKey = SettingsModel.get('reachinbox_api_key') || '';
+  const campaignId = SettingsModel.get('reachinbox_campaign_id') || '';
+  const autoSync = SettingsModel.get('reachinbox_auto_sync') === 'true';
+  res.json({
+    hasApiKey: !!apiKey,
+    apiKeyMasked: apiKey ? `${apiKey.slice(0, 4)}••••${apiKey.slice(-4)}` : '',
+    campaignId,
+    autoSync
+  });
+});
+
+// Update ReachInbox configuration
+app.post('/api/reachinbox/config', requireAuth, requireAdmin, (req, res) => {
+  const { apiKey, campaignId, autoSync } = req.body;
+  if (apiKey !== undefined && apiKey !== '••••') {
+    SettingsModel.set('reachinbox_api_key', apiKey.trim());
+  }
+  if (campaignId !== undefined) {
+    SettingsModel.set('reachinbox_campaign_id', campaignId.trim());
+  }
+  if (autoSync !== undefined) {
+    SettingsModel.set('reachinbox_auto_sync', autoSync ? 'true' : 'false');
+  }
+  LogModel.add('reachinbox', 'config_updated', 'ReachInbox settings updated by admin');
+  res.json({ success: true, message: 'ReachInbox configuration saved.' });
+});
+
+// Test connection to ReachInbox API
+app.post('/api/reachinbox/test', requireAuth, async (req, res) => {
+  const apiKey = req.body.apiKey ? req.body.apiKey.trim() : null;
+  const result = await ReachInboxClient.testConnection(apiKey);
+  res.json(result);
+});
+
+// Push selected leads to ReachInbox campaign
+app.post('/api/reachinbox/push-leads', requireAuth, async (req, res) => {
+  try {
+    const { leadIds, campaignId } = req.body;
+    let leads = [];
+    if (Array.isArray(leadIds) && leadIds.length > 0) {
+      const placeholders = leadIds.map(() => '?').join(',');
+      leads = db.prepare(`SELECT * FROM google_maps_leads WHERE id IN (${placeholders}) AND email IS NOT NULL AND email != ''`).all(...leadIds);
+    } else {
+      leads = db.prepare(`SELECT * FROM google_maps_leads WHERE email IS NOT NULL AND email != '' LIMIT 50`).all();
+    }
+
+    if (leads.length === 0) {
+      return res.status(400).json({ error: 'No leads with valid email addresses found to sync.' });
+    }
+
+    const result = await ReachInboxClient.syncLeadsToCampaign({ leads, campaignIdOverride: campaignId });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Export Google Maps leads formatted specifically for ReachInbox CSV import
+app.get('/api/maps/export-reachinbox', requireAuth, (req, res) => {
+  try {
+    const leads = GoogleMapsLeadModel.getAll({ limit: 1000 });
+    const csvContent = ReachInboxClient.generateReachInboxCsv(leads);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="reachinbox_leads_${Date.now()}.csv"`);
+    res.send(csvContent);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Batch generate clean scorecards and links for all Google Maps leads
+app.post('/api/maps/auto-scorecard', requireAuth, (req, res) => {
+  try {
+    const result = MapsScorecardBridge.syncAllMapsLeadsScorecards();
+    res.json({ success: true, ...result, message: `Successfully generated scorecards and clean email links for ${result.updated} leads.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== SOCIAL ENGAGEMENT PIPELINE ROUTES ====================
+
+// Engage a single lead on social media (Like recent post -> Expert comment -> Direct Message)
+app.post('/api/maps/leads/:id/engage-social', requireAuth, async (req, res) => {
+  try {
+    const result = await socialEngagementEngine.engageLeadSocial(req.params.id);
+    orchestrator.broadcast('social_engagement_update', { leadId: req.params.id, result });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Run automated batch social engagement
+app.post('/api/maps/leads/auto-engage-batch', requireAuth, async (req, res) => {
+  try {
+    const batchSize = Math.min(parseInt(req.body.batchSize || '5', 10), 15);
+    const result = await socialEngagementEngine.runAutomatedEngagementBatch(batchSize);
+    orchestrator.broadcast('social_engagement_batch_complete', result);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get social engagement scheduler status and quotas
+app.get('/api/social-engagement/status', requireAuth, (req, res) => {
+  const enabled = SettingsModel.get('auto_engage_enabled') !== 'false';
+  const times = SettingsModel.get('auto_engage_times') || '10:00,15:00';
+  const igQuota = QuotaModel.getToday('instagram');
+  const maxLikes = parseInt(SettingsModel.get('daily_max_likes') || '25', 10);
+  const maxComments = parseInt(SettingsModel.get('daily_max_comments') || '15', 10);
+  const maxDMs = parseInt(SettingsModel.get('daily_max_dms') || '10', 10);
+
+  res.json({
+    enabled,
+    scheduleTimes: times.split(',').map(s => s.trim()),
+    isProcessing: socialEngagementEngine.isProcessing,
+    quotas: {
+      likes: { count: igQuota.likes_count || 0, max: maxLikes },
+      comments: { count: igQuota.comments_count || 0, max: maxComments },
+      dms: { count: igQuota.dms_count || 0, max: maxDMs }
+    }
+  });
+});
+
+// Update social engagement schedule config
+app.post('/api/social-engagement/config', requireAuth, requireAdmin, (req, res) => {
+  const { enabled, times, maxLikes, maxComments, maxDMs } = req.body;
+  if (enabled !== undefined) SettingsModel.set('auto_engage_enabled', enabled ? 'true' : 'false');
+  if (times !== undefined) SettingsModel.set('auto_engage_times', times.trim());
+  if (maxLikes !== undefined) SettingsModel.set('daily_max_likes', String(maxLikes));
+  if (maxComments !== undefined) SettingsModel.set('daily_max_comments', String(maxComments));
+  if (maxDMs !== undefined) SettingsModel.set('daily_max_dms', String(maxDMs));
+
+  LogModel.add('system', 'schedule_config_updated', 'Social engagement scheduler settings updated');
+  res.json({ success: true, message: 'Engagement scheduler configuration updated.' });
+});
+
 // ==================== SCORECARD & DIGITAL HEALTH ASSESSMENT ROUTES ====================
 
 // Public Scorecard Web Page Route (STRICTLY OPEN / NO LOGIN)
@@ -910,6 +1062,51 @@ app.get('/api/scorecard/config', (req, res) => {
       agencyName,
       founderName,
       agencyPhone
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get Public Scorecard Report (STRICTLY OPEN / NO LOGIN - Accessible to Prospects via Email/SMS Link)
+app.get('/api/scorecard/public-report/:id', publicApiRateLimiter.middleware(), (req, res) => {
+  try {
+    const lead = ScorecardLeadModel.getById(req.params.id);
+    if (!lead) {
+      return res.status(404).json({ error: 'Scorecard report not found or expired.' });
+    }
+
+    let answers = {};
+    let rxData = {};
+    try { answers = typeof lead.answers === 'string' ? JSON.parse(lead.answers) : (lead.answers || {}); } catch (_) {}
+    try { rxData = typeof lead.prescription_data === 'string' ? JSON.parse(lead.prescription_data) : (lead.prescription_data || {}); } catch (_) {}
+
+    const topmateUrl = SettingsModel.get('topmate_url') || 'https://topmate.io/isurajjaiswal';
+    const agencyName = SettingsModel.get('agency_name') || 'The Digital Frog';
+    const founderName = SettingsModel.get('founder_name') || 'Suraj Jaiswal';
+    const agencyPhone = SettingsModel.get('agency_phone') || '+1 (512) 717-3147';
+
+    res.json({
+      success: true,
+      report: {
+        id: lead.id,
+        businessName: lead.business_name,
+        contactPerson: lead.contact_person,
+        businessType: lead.business_type,
+        city: lead.city,
+        overallScore: lead.overall_score,
+        videoScore: lead.video_score,
+        discoveryScore: lead.discovery_score,
+        conversionScore: lead.conversion_score,
+        prescriptionText: lead.prescription_text,
+        prescriptionData: rxData,
+        pdfUrl: lead.pdf_url || `/api/scorecard/leads/${lead.id}/pdf`,
+        topmateUrl,
+        agencyName,
+        founderName,
+        agencyPhone,
+        createdAt: lead.created_at
+      }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1280,4 +1477,7 @@ server.listen(PORT, async () => {
   } catch (err) {
     console.warn('[Tunnel Notice] Automatic tunnel startup:', err.message);
   }
+
+  // Start fixed-time social media automated engagement scheduler (10:00 AM & 3:00 PM)
+  socialEngagementEngine.startFixedTimeScheduler();
 });

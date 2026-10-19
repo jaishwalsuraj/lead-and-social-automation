@@ -731,7 +731,81 @@
       } catch (err) {
         console.warn('Failed loading remote config, using defaults:', err);
       }
+
+      // Check for direct report link (e.g. /scorecard?report=12 or ?id=12) sent to prospects in clean email
+      const urlParams = new URLSearchParams(window.location.search);
+      const directReportId = urlParams.get('report') || urlParams.get('id') || urlParams.get('audit');
+      if (directReportId) {
+        await loadDirectPublicReport(directReportId);
+        return;
+      }
+
       renderCurrentStep();
+    }
+
+    async function loadDirectPublicReport(reportId) {
+      const container = document.getElementById('step-view');
+      document.getElementById('sc-progress-wrap').style.display = 'none';
+      container.innerHTML = `
+        <div style="text-align: center; padding: 4rem 1rem;">
+          <div style="display: inline-block; width: 44px; height: 44px; border: 3px solid rgba(6, 182, 212, 0.2); border-top-color: #06b6d4; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 1.25rem;"></div>
+          <h3 style="color: #fff; font-size: 1.35rem; font-weight: 700;">Retrieving Your Practice Diagnostic Blueprint...</h3>
+          <p style="color: #94a3b8; font-size: 0.95rem;">Please hold on while we prepare your confidential growth prescription.</p>
+        </div>
+        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+      `;
+
+      try {
+        const res = await fetch(`/api/scorecard/public-report/${reportId}`);
+        if (!res.ok) {
+          throw new Error('This diagnostic report could not be found or has expired.');
+        }
+        const data = await res.json();
+        if (!data.success || !data.report) {
+          throw new Error(data.error || 'Invalid report data');
+        }
+
+        const rep = data.report;
+        const rxData = rep.prescriptionData || {};
+
+        const resData = {
+          scores: {
+            overallScore: rep.overallScore,
+            videoScore: rep.videoScore,
+            discoveryScore: rep.discoveryScore,
+            conversionScore: rep.conversionScore,
+            grade: rep.overallScore >= 80 ? 'A' : rep.overallScore >= 65 ? 'B' : rep.overallScore >= 45 ? 'C' : 'D',
+            statusSummary: rep.overallScore < 50 ? 'Critical Video Growth Deficiency' : 'High Patient Growth Potential'
+          },
+          niche: rxData.niche || (rep.businessType && rep.businessType.toLowerCase().includes('medic') ? 'medical' : 'medical'),
+          prescriptionText: rep.prescriptionText,
+          reelHooks: rxData.reelHooks || rxData.defaultHooks || [],
+          pdfUrl: rep.pdfUrl,
+          topmateUrl: rep.topmateUrl,
+          agencyName: rep.agencyName,
+          founderName: rep.founderName,
+          agencyPhone: rep.agencyPhone
+        };
+
+        const leadData = {
+          businessName: rep.businessName,
+          contactPerson: rep.contactPerson,
+          businessType: rep.businessType,
+          city: rep.city || 'Confidential Area',
+          email: ''
+        };
+
+        renderResultsView(resData, leadData);
+      } catch (err) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 3rem 1.5rem; background: rgba(239, 68, 68, 0.08); border: 1px solid #ef4444; border-radius: 12px;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚠️</div>
+            <h3 style="color: #ef4444; font-weight: 700;">Diagnostic Report Notice</h3>
+            <p style="color: #cbd5e1; max-width: 480px; margin: 0 auto 1.5rem auto;">${err.message || 'Unable to load report.'}</p>
+            <a href="/scorecard" class="btn btn-primary" style="display: inline-block; padding: 0.65rem 1.5rem; font-weight: 700; border-radius: 8px;">Take 2-Minute Diagnostic Assessment</a>
+          </div>
+        `;
+      }
     }
 
     function renderCurrentStep() {

@@ -2438,6 +2438,8 @@ async function loadSettings() {
   try {
     loadSuperAdminSecurity();
     loadTeamUsers();
+    loadReachInboxSettings();
+    loadSocialAutomationSettings();
     const res = await fetch('/api/settings');
     const settings = await res.json();
 
@@ -2876,6 +2878,16 @@ async function triggerMapsScan() {
   const limit = parseInt(document.getElementById('maps-limit')?.value || '20', 10);
   const noWebsiteOnly = document.getElementById('maps-no-website-toggle')?.checked ?? false;
 
+  // Strict Policy Check: Exclude Bangladesh, Pakistan, Bhutan, Nepal, Sri Lanka, etc.
+  const excludedKeywords = ['bangladesh', 'pakistan', 'bhutan', 'nepal', 'sri lanka', 'dhaka', 'karachi', 'lahore', 'islamabad', 'kathmandu', 'thimphu', 'colombo'];
+  const fullSearch = `${query} ${location}`.toLowerCase();
+  for (const kw of excludedKeywords) {
+    if (fullSearch.includes(kw)) {
+      alert(`⛔ Targeting Restricted: Targeting policy strictly excludes ${kw.toUpperCase()} and low-currency territories.\n\nPlease target high-value tier-1 markets (e.g. Austin, London, New York, Sydney, Toronto, Dubai, Mumbai).`);
+      return;
+    }
+  }
+
   const btn = document.getElementById('btn-maps-scan');
   if (btn) {
     btn.disabled = true;
@@ -3135,32 +3147,44 @@ function detectClientNiche(str = '') {
   return 'general';
 }
 
-function renderMapsCards(leads) {
-  const container = document.getElementById('maps-leads-container');
-  if (!container) return;
-
-  if (!leads || leads.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">📍</div>
-        <h3>No matching verified Google Maps leads found</h3>
-        <p>Try clearing filters or click <strong>"Hunt Google Maps Leads"</strong> or <strong>"⚡ Re-Verify All Leads"</strong> to discover reachable opportunities.</p>
-      </div>`;
-    return;
+function extractCleanEmailPitch(lead, rawContent = null) {
+  let content = rawContent || lead.ai_email_pitch || lead.doctor_prescription || '';
+  if (typeof content === 'string' && content.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(content);
+      content = parsed.rxEmail || parsed.version1?.rxEmail || parsed.emailPitch || '';
+    } catch (_) {}
   }
 
-  container.innerHTML = leads.map(lead => {
-    const hasWebsite = !!lead.has_website;
-    const oppScore = lead.opportunity_score || 80;
-    
-    const isMedical = !!lead.is_medical;
-    const nicheKey = isMedical ? 'medical' : detectClientNiche((lead.category || '') + ' ' + (lead.business_name || '') + ' ' + (lead.search_query || ''));
-    const niche = NICHE_MAP[nicheKey] || (isMedical ? NICHE_MAP.medical : NICHE_MAP.general);
-    
-    // Website badge
-    const websiteBadge = !hasWebsite 
-      ? `<span class="maps-badge-no-website" title="Verified: No website linked on Google Maps! Prime high-ticket AI web dev prospect.">🔥 NO WEBSITE VERIFIED — AI Web Dev Prospect</span>`
-      : `<a href="${escapeHtml(lead.website_url)}" target="_blank" rel="noopener noreferrer" class="maps-badge-has-website" title="Verified Official Website">🌐 Verified Website ↗</a>`;
+  const isMed = Boolean(lead.is_medical || (lead.category && lead.category.toLowerCase().includes('dent')) || (lead.category && lead.category.toLowerCase().includes('medic')));
+  let subject = isMed
+    ? `Quick question regarding ${lead.business_name} (${lead.city || 'patient acquisition'})`
+    : `Digital audit & video inquiry for ${lead.business_name}`;
+
+  let body = String(content || '');
+  if (body.includes('Subject:')) {
+    const lines = body.split(/\r?\n/);
+    const subLine = lines.find(l => l.toLowerCase().startsWith('subject:'));
+    if (subLine) {
+      subject = subLine.replace(/subject:\s*/i, '').trim();
+      body = lines.filter(l => !l.toLowerCase().startsWith('subject:')).join('\n').trim();
+    }
+  }
+
+  return { subject, body };
+}
+
+function renderMapsLeadCard(lead) {
+  try {
+    const oppScore = lead.opportunity_score || 50;
+    const hasWebsite = Boolean(lead.has_website);
+    const nicheKey = detectBusinessNiche(lead.category, lead.business_name);
+    const niche = MAPS_NICHES[nicheKey] || MAPS_NICHES.medical;
+    const isMedical = Boolean(lead.is_medical || nicheKey === 'medical');
+
+    const websiteBadge = hasWebsite 
+      ? `<span class="maps-badge-site has-site" title="Active Website Verified: SEO, Speed-to-Lead, and AI Reels Optimization Pitch Ready">✅ HAS WEBSITE</span>` 
+      : `<span class="maps-badge-site no-site" title="High-Ticket Hot Lead: No website found! Prime target for Website Development + AI Avatar Growth Package">🔥 NO WEBSITE</span>`;
 
     const nicheBadge = isMedical 
       ? `<span class="maps-badge-medical" title="Verified Healthcare & Clinic Lead: Tailored Doctor's Rx Prescription & AI Avatar Strategy Ready">🩺 DOCTOR / CLINIC Rx</span>`
@@ -3181,10 +3205,11 @@ function renderMapsCards(leads) {
       ? `${lead.whatsapp_url}?text=${encodedWaPitch}` 
       : (cleanDigits ? `https://wa.me/${cleanDigits.replace(/^\+/, '')}?text=${encodedWaPitch}` : '#');
 
-    // Email address
+    // Clean Email address and pitch (No raw JSON, no ASCII clutter!)
     const email = lead.email || '';
-    const encodedEmailSubject = encodeURIComponent(isMedical ? `℞ Clinical Growth Prescription for ${lead.business_name}` : `${niche.icon} Growth Blueprint & AI Protocol for ${lead.business_name}`);
-    const encodedEmailBody = encodeURIComponent(lead.doctor_prescription || lead.ai_email_pitch || '');
+    const cleanEmail = extractCleanEmailPitch(lead);
+    const encodedEmailSubject = encodeURIComponent(cleanEmail.subject);
+    const encodedEmailBody = encodeURIComponent(cleanEmail.body);
     const mailtoUrl = email ? `mailto:${email}?subject=${encodedEmailSubject}&body=${encodedEmailBody}` : '#';
 
     // Parse social handles
@@ -3297,6 +3322,14 @@ function renderMapsCards(leads) {
               <a href="${mailtoUrl}" class="btn btn-sm btn-outline" title="Send pre-filled email pitch">
                 ✉️ Email Pitch
               </a>
+              <button class="btn btn-sm btn-outline" onclick="openReachInboxModal(${lead.id})" title="Sync to ReachInbox campaign">
+                🚀 ReachInbox
+              </button>
+            ` : ''}
+            ${(socials.instagram || socials.threads) ? `
+              <button class="btn btn-sm btn-outline-call" onclick="engageSingleSocialLead(${lead.id})" title="Auto-engage: Like recent post -> Expert comment -> DM with Scorecard">
+                📱 Engage Social
+              </button>
             ` : ''}
             <button class="btn btn-sm ${isMedical ? 'btn-primary btn-medical-rx' : 'btn-primary'}" onclick="openMapsPitchModal(${lead.id})" title="${isMedical ? 'View Doctor Rx Prescription, Social Audit & AI Avatar Plan' : `View ${niche.name} Growth Blueprint & AI Pitch`}">
               ${isMedical ? '🩺 View Doctor Rx & Audit' : `${niche.icon} View Growth Blueprint`}
@@ -3318,7 +3351,27 @@ function renderMapsCards(leads) {
         </div>
       </div>
     `;
-  }).join('');
+  } catch (err) {
+    console.error('Error rendering maps lead card:', err);
+    return '';
+  }
+}
+
+function renderMapsCards(leads) {
+  const container = document.getElementById('maps-leads-container');
+  if (!container) return;
+
+  if (!leads || leads.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📍</div>
+        <h3>No matching verified Google Maps leads found</h3>
+        <p>Try clearing filters or click <strong>"Hunt Google Maps Leads"</strong> or <strong>"⚡ Re-Verify All Leads"</strong> to discover reachable opportunities.</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = leads.map(lead => renderMapsLeadCard(lead)).join('');
 }
 
 function openMapsPitchModal(leadId) {
@@ -3433,8 +3486,9 @@ function openMapsPitchModal(leadId) {
   // Email link in Rx/Blueprint tab
   const emailRxBtn = document.getElementById('btn-open-email-rx');
   if (emailRxBtn) {
-    const encSub = encodeURIComponent(isMedical ? `℞ Clinical Growth Prescription for ${lead.business_name}` : `${niche.icon} Growth Blueprint & AI Protocol for ${lead.business_name}`);
-    const encBody = encodeURIComponent(v1.email || lead.doctor_prescription || lead.ai_email_pitch || '');
+    const cleanMail = extractCleanEmailPitch(lead, v1.email);
+    const encSub = encodeURIComponent(cleanMail.subject || (isMedical ? `℞ Clinical Growth Prescription for ${lead.business_name}` : `${niche.icon} Growth Blueprint & AI Protocol for ${lead.business_name}`));
+    const encBody = encodeURIComponent(cleanMail.body);
     emailRxBtn.href = lead.email ? `mailto:${lead.email}?subject=${encSub}&body=${encBody}` : '#';
     emailRxBtn.style.display = lead.email ? 'inline-flex' : 'none';
   }
@@ -3461,7 +3515,19 @@ function applyOutreachPitchVersion(ver) {
   if (rxElem) rxElem.innerText = data.rx;
   if (callElem) callElem.innerText = data.call;
   if (waElem) waElem.innerText = data.wa;
-  if (emailElem) emailElem.innerText = data.email;
+  if (emailElem) {
+    const cleanMail = extractCleanEmailPitch(activeMapsPitchLead || {}, data.email);
+    emailElem.innerText = `Subject: ${cleanMail.subject}\n\n${cleanMail.body}`;
+  }
+
+  const emailRxBtn = document.getElementById('btn-open-email-rx');
+  if (emailRxBtn && activeMapsPitchLead) {
+    const cleanMail = extractCleanEmailPitch(activeMapsPitchLead, data.email);
+    const encSub = encodeURIComponent(cleanMail.subject || `Growth Inquiry for ${activeMapsPitchLead.business_name}`);
+    const encBody = encodeURIComponent(cleanMail.body);
+    emailRxBtn.href = activeMapsPitchLead.email ? `mailto:${activeMapsPitchLead.email}?subject=${encSub}&body=${encBody}` : '#';
+    emailRxBtn.style.display = activeMapsPitchLead.email ? 'inline-flex' : 'none';
+  }
 
   // Update WhatsApp links
   const phone = window.currentLeadPitches.phone || '';
@@ -4103,3 +4169,336 @@ async function deleteScorecardLead(leadId) {
   }
 }
 
+// ==================== REACHINBOX INTEGRATION & CSV EXPORT ====================
+let reachInboxTargetLeadId = null;
+
+async function loadReachInboxSettings() {
+  try {
+    const res = await fetch('/api/reachinbox/config');
+    if (!res.ok) return;
+    const config = await res.json();
+    const keyInput = document.getElementById('reachinbox-api-key');
+    const cmpInput = document.getElementById('reachinbox-campaign-id');
+    const autoSync = document.getElementById('reachinbox-auto-sync');
+    const badge = document.getElementById('reachinbox-status-badge');
+
+    if (keyInput && config.apiKey) keyInput.value = config.apiKey;
+    if (cmpInput && config.campaignId) cmpInput.value = config.campaignId;
+    if (autoSync && config.autoSync !== undefined) autoSync.checked = Boolean(config.autoSync);
+
+    if (badge) {
+      if (config.apiKey) {
+        badge.innerText = '● ReachInbox Connected';
+        badge.style.color = '#34d399';
+        badge.style.background = 'rgba(16, 185, 129, 0.15)';
+        badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+      } else {
+        badge.innerText = '○ API Key Required';
+        badge.style.color = '#94a3b8';
+        badge.style.background = 'rgba(148, 163, 184, 0.1)';
+        badge.style.borderColor = 'rgba(148, 163, 184, 0.2)';
+      }
+    }
+  } catch (err) {
+    console.debug('Failed to load ReachInbox config:', err);
+  }
+}
+
+async function saveReachInboxSettings(event) {
+  if (event) event.preventDefault();
+  const apiKey = document.getElementById('reachinbox-api-key')?.value.trim() || '';
+  const campaignId = document.getElementById('reachinbox-campaign-id')?.value.trim() || '';
+  const autoSync = document.getElementById('reachinbox-auto-sync')?.checked || false;
+
+  try {
+    const res = await fetch('/api/reachinbox/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey, campaignId, autoSync })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showLeadNotificationToast('✅ ReachInbox Saved', 'ReachInbox settings updated successfully.');
+      loadReachInboxSettings();
+    } else {
+      alert(data.error || 'Failed to save ReachInbox settings');
+    }
+  } catch (err) {
+    alert('Error saving ReachInbox settings: ' + err.message);
+  }
+}
+
+async function testReachInboxConnection() {
+  const resultDiv = document.getElementById('reachinbox-test-result');
+  const apiKey = document.getElementById('reachinbox-api-key')?.value.trim();
+  const campaignId = document.getElementById('reachinbox-campaign-id')?.value.trim();
+
+  if (resultDiv) {
+    resultDiv.innerHTML = '<span style="color: #60a5fa;">⏳ Testing ReachInbox connection...</span>';
+  }
+
+  try {
+    const res = await fetch('/api/reachinbox/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey, campaignId })
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (resultDiv) {
+        resultDiv.innerHTML = `<span style="color: #34d399;">✅ Connected! ReachInbox API verified. ${escapeHtml(data.message || '')}</span>`;
+      }
+      showLeadNotificationToast('🔌 ReachInbox Online', 'ReachInbox API connection verified.');
+    } else {
+      if (resultDiv) {
+        resultDiv.innerHTML = `<span style="color: #ef4444;">❌ Connection failed: ${escapeHtml(data.error || 'Invalid API Key or Campaign')}</span>`;
+      }
+    }
+  } catch (err) {
+    if (resultDiv) {
+      resultDiv.innerHTML = `<span style="color: #ef4444;">❌ Error: ${escapeHtml(err.message)}</span>`;
+    }
+  }
+}
+
+function exportReachInboxCsv() {
+  const tokenParam = authToken ? `?token=${encodeURIComponent(authToken)}` : '';
+  window.open(`/api/maps/export-reachinbox${tokenParam}`, '_blank');
+  showLeadNotificationToast('📥 Export Started', 'Downloading ReachInbox CSV with clean Scorecard URLs.');
+}
+
+function openReachInboxModal(singleLeadId = null) {
+  reachInboxTargetLeadId = singleLeadId;
+  const modal = document.getElementById('modal-reachinbox-sync');
+  const countSpan = document.getElementById('reachinbox-sync-count');
+  const cmpInput = document.getElementById('reachinbox-sync-campaign-id');
+  const savedCmp = document.getElementById('reachinbox-campaign-id')?.value || '';
+  const progressDiv = document.getElementById('reachinbox-sync-progress');
+
+  if (progressDiv) progressDiv.style.display = 'none';
+
+  if (cmpInput && savedCmp) {
+    cmpInput.value = savedCmp;
+  }
+
+  if (singleLeadId) {
+    const lead = allMapsLeads.find(l => l.id === singleLeadId);
+    if (countSpan) {
+      countSpan.innerText = lead ? `1 Lead (${lead.business_name})` : `Lead #${singleLeadId}`;
+    }
+  } else {
+    const emailLeads = allMapsLeads.filter(l => l.email && l.email.includes('@'));
+    if (countSpan) {
+      countSpan.innerText = `${emailLeads.length} Verified Email Leads in CRM`;
+    }
+  }
+
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeReachInboxModal() {
+  const modal = document.getElementById('modal-reachinbox-sync');
+  if (modal) modal.style.display = 'none';
+  reachInboxTargetLeadId = null;
+}
+
+async function submitReachInboxSync() {
+  const btn = document.getElementById('btn-submit-reachinbox-sync');
+  const cmpInput = document.getElementById('reachinbox-sync-campaign-id');
+  const progressDiv = document.getElementById('reachinbox-sync-progress');
+  const campaignId = cmpInput?.value.trim();
+
+  if (btn) btn.disabled = true;
+  if (progressDiv) {
+    progressDiv.style.display = 'block';
+    progressDiv.style.background = 'rgba(59, 130, 246, 0.15)';
+    progressDiv.style.color = '#93c5fd';
+    progressDiv.innerText = 'Pushing leads and custom scorecard URLs to ReachInbox...';
+  }
+
+  try {
+    const payload = {};
+    if (campaignId) payload.campaignId = campaignId;
+    if (reachInboxTargetLeadId) payload.leadIds = [reachInboxTargetLeadId];
+
+    const res = await fetch('/api/reachinbox/push-leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      if (progressDiv) {
+        progressDiv.style.background = 'rgba(16, 185, 129, 0.15)';
+        progressDiv.style.color = '#34d399';
+        progressDiv.innerText = `✅ Successfully synced ${data.synced || 0} leads to ReachInbox!`;
+      }
+      showLeadNotificationToast('🚀 ReachInbox Synced', `Pushed ${data.synced || 0} leads to campaign.`);
+      setTimeout(() => {
+        closeReachInboxModal();
+      }, 1800);
+    } else {
+      if (progressDiv) {
+        progressDiv.style.background = 'rgba(239, 68, 68, 0.15)';
+        progressDiv.style.color = '#fca5a5';
+        progressDiv.innerText = `❌ Sync failed: ${data.error || 'Check ReachInbox API key & Campaign ID'}`;
+      }
+    }
+  } catch (err) {
+    if (progressDiv) {
+      progressDiv.style.background = 'rgba(239, 68, 68, 0.15)';
+      progressDiv.style.color = '#fca5a5';
+      progressDiv.innerText = `❌ Error: ${err.message}`;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ==================== AUTO SCORECARD & SOCIAL PIPELINE ====================
+async function triggerAutoScorecards() {
+  appendTerminalLog('🔄 Generating diagnostic scorecards & public links for all Google Maps leads...', 'text-info');
+  showLeadNotificationToast('⏳ Processing Scorecards', 'Generating clinical/business scorecards & clean email pitches for all leads...');
+  try {
+    const res = await fetch('/api/maps/auto-scorecard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (data.success) {
+      appendTerminalLog(`✅ Scorecards generated: ${data.total} processed (${data.created} new, ${data.updated} updated).`, 'text-emerald');
+      showLeadNotificationToast('📋 Scorecards Ready', `Generated ${data.total} scorecards with live links.`);
+      loadMapsLeads();
+      loadScorecardLeads();
+    } else {
+      appendTerminalLog(`Scorecard generation error: ${data.error}`, 'text-danger');
+    }
+  } catch (err) {
+    appendTerminalLog(`Failed to run auto-scorecards: ${err.message}`, 'text-danger');
+  }
+}
+
+async function loadSocialAutomationSettings() {
+  try {
+    const res = await fetch('/api/social-engagement/status');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const timesInput = document.getElementById('social-schedule-times');
+    const likesInput = document.getElementById('social-daily-likes');
+    const commentsInput = document.getElementById('social-daily-comments');
+    const dmsInput = document.getElementById('social-daily-dms');
+    const enabledInput = document.getElementById('social-auto-enabled');
+    const badge = document.getElementById('social-scheduler-badge');
+
+    if (timesInput && data.scheduleTimes) timesInput.value = data.scheduleTimes.join(', ');
+    if (likesInput && data.quotas?.likes?.max) likesInput.value = data.quotas.likes.max;
+    if (commentsInput && data.quotas?.comments?.max) commentsInput.value = data.quotas.comments.max;
+    if (dmsInput && data.quotas?.dms?.max) dmsInput.value = data.quotas.dms.max;
+    if (enabledInput && data.enabled !== undefined) enabledInput.checked = Boolean(data.enabled);
+
+    if (badge) {
+      if (data.enabled) {
+        badge.innerText = `● Active (${data.scheduleTimes?.join(' & ') || 'Daily'})`;
+        badge.style.color = '#34d399';
+        badge.style.background = 'rgba(16, 185, 129, 0.15)';
+      } else {
+        badge.innerText = '○ Automation Paused';
+        badge.style.color = '#94a3b8';
+        badge.style.background = 'rgba(148, 163, 184, 0.1)';
+      }
+    }
+  } catch (err) {
+    console.debug('Failed to load social automation config:', err);
+  }
+}
+
+async function saveSocialAutomationSettings(event) {
+  if (event) event.preventDefault();
+  const timesRaw = document.getElementById('social-schedule-times')?.value || '10:00, 15:00';
+  const maxDailyLikes = parseInt(document.getElementById('social-daily-likes')?.value || '25', 10);
+  const maxDailyComments = parseInt(document.getElementById('social-daily-comments')?.value || '15', 10);
+  const maxDailyDMs = parseInt(document.getElementById('social-daily-dms')?.value || '10', 10);
+  const enabled = document.getElementById('social-auto-enabled')?.checked ?? true;
+
+  try {
+    const res = await fetch('/api/social-engagement/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ times: timesRaw, maxLikes: maxDailyLikes, maxComments: maxDailyComments, maxDMs: maxDailyDMs, enabled })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showLeadNotificationToast('✅ Social Automation Saved', 'Schedule & safety limits updated.');
+      loadSocialAutomationSettings();
+    } else {
+      alert(data.error || 'Failed to save social automation config');
+    }
+  } catch (err) {
+    alert('Error saving social automation: ' + err.message);
+  }
+}
+
+async function triggerAutoSocialEngagement() {
+  appendTerminalLog('📱 Starting automated social engagement pipeline (Like -> Comment -> DM)...', 'text-info');
+  showLeadNotificationToast('📱 Social Pipeline Active', 'Running safe engagement batch adhering to platform rate limits...');
+  const statusDiv = document.getElementById('social-auto-status');
+  if (statusDiv) {
+    statusDiv.innerHTML = '<span style="color: #34d399;">⏳ Executing social engagement batch...</span>';
+  }
+
+  try {
+    const res = await fetch('/api/maps/leads/auto-engage-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ limit: 5 })
+    });
+    const data = await res.json();
+    if (data.success) {
+      appendTerminalLog(`📱 Social engagement batch finished: ${data.processed || 0} leads engaged.`, 'text-emerald');
+      showLeadNotificationToast('✅ Engagement Batch Done', `Engaged ${data.processed || 0} leads with scorecard DMs.`);
+      if (statusDiv) {
+        statusDiv.innerHTML = `<span style="color: #34d399;">✅ Batch complete: Engaged ${data.processed || 0} prospects successfully.</span>`;
+      }
+      loadMapsLeads();
+    } else {
+      appendTerminalLog(`Social batch notice: ${data.error || data.message}`, 'text-warning');
+      if (statusDiv) {
+        statusDiv.innerHTML = `<span style="color: #f59e0b;">Notice: ${escapeHtml(data.error || data.message || '')}</span>`;
+      }
+    }
+  } catch (err) {
+    appendTerminalLog(`Social batch error: ${err.message}`, 'text-danger');
+    if (statusDiv) {
+      statusDiv.innerHTML = `<span style="color: #ef4444;">Error: ${escapeHtml(err.message)}</span>`;
+    }
+  }
+}
+
+async function engageSingleSocialLead(leadId) {
+  const lead = allMapsLeads.find(l => l.id === leadId);
+  const name = lead ? lead.business_name : `Lead #${leadId}`;
+  appendTerminalLog(`📱 Initiating 3-step social engagement pipeline for ${name}...`, 'text-info');
+  showLeadNotificationToast('📱 Social Outreach Running', `Liking recent post, posting expert comment & sending DM for ${name}...`);
+
+  try {
+    const res = await fetch(`/api/maps/leads/${leadId}/engage-social`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (data.success) {
+      appendTerminalLog(`✅ Social engagement complete for ${name}! DM dispatched with Scorecard link.`, 'text-emerald');
+      showLeadNotificationToast('✅ Social Engaged', `Successfully completed 3-step outreach for ${name}.`);
+      loadMapsLeads();
+    } else {
+      appendTerminalLog(`Social engagement error for ${name}: ${data.error || data.message}`, 'text-danger');
+      alert(`Social engagement notice: ${data.error || data.message}`);
+    }
+  } catch (err) {
+    appendTerminalLog(`Social engagement network error: ${err.message}`, 'text-danger');
+    alert(`Failed to execute social engagement: ${err.message}`);
+  }
+}
