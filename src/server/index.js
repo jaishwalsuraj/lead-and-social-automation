@@ -370,7 +370,7 @@ app.get('/api/stats', requireAuth, (req, res) => {
 });
 
 // Platform Auth Check (Admin only)
-app.get('/api/platforms', requireAuth, requireAdmin, async (req, res) => {
+app.get(['/api/platforms', '/api/platforms/status'], requireAuth, requireAdmin, async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === 'true';
     const statuses = await browserManager.getConnectedPlatforms(forceRefresh);
@@ -459,7 +459,7 @@ app.post('/api/leads/:id/feedback', requireAuth, (req, res) => {
 });
 
 // Get Learned Lead Intelligence Rules
-app.get('/api/leads/learning/rules', requireAuth, (req, res) => {
+app.get(['/api/leads/learning/rules', '/api/leads/rules'], requireAuth, (req, res) => {
   const { type } = req.query;
   res.json(LeadModel.getLearningRules(type || null));
 });
@@ -583,6 +583,20 @@ app.post('/api/leads/:id/status', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// Get Single Social Lead
+app.get('/api/leads/:id', requireAuth, (req, res) => {
+  const lead = LeadModel.getById(req.params.id);
+  if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  res.json(lead);
+});
+
+// Update Social Lead Notes
+app.post('/api/leads/:id/notes', requireAuth, (req, res) => {
+  const { notes } = req.body;
+  LeadModel.updateNotes(req.params.id, notes || '');
+  res.json({ success: true, notes });
+});
+
 // Delete Social Lead
 app.delete('/api/leads/:id', requireAuth, (req, res) => {
   try {
@@ -619,6 +633,26 @@ app.post('/api/posts/publish', requireAuth, async (req, res) => {
       });
     }
     res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get Content Studio Posts
+app.get('/api/posts', requireAuth, (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '50', 10), 100);
+    res.json(PostModel.getAll(limit));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get System Activity Logs
+app.get('/api/logs', requireAuth, (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '50', 10), 100);
+    res.json({ logs: LogModel.getRecent(limit) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -727,7 +761,7 @@ app.post('/api/maps/leads/:id/status', requireAuth, (req, res) => {
 });
 
 // Regenerate AI Pitches & Doctor Rx Prescription for Google Maps Lead
-app.post('/api/maps/leads/:id/pitch', requireAuth, (req, res) => {
+app.post(['/api/maps/leads/:id/pitch', '/api/maps/leads/:id/generate-pitch'], requireAuth, (req, res) => {
   try {
     const lead = GoogleMapsLeadModel.getById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
@@ -781,7 +815,7 @@ app.post('/api/maps/leads/:id/pitch', requireAuth, (req, res) => {
 });
 
 // Run or Refresh Social Media Audit & AI Avatar Plan for Lead
-app.post('/api/maps/leads/:id/audit', requireAuth, (req, res) => {
+app.post(['/api/maps/leads/:id/audit', '/api/maps/leads/:id/deep-audit'], requireAuth, (req, res) => {
   try {
     const lead = GoogleMapsLeadModel.getById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });

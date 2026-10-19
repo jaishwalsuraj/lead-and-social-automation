@@ -273,6 +273,7 @@ export function initDatabase() {
     if (!cols.includes('verification_status')) db.exec("ALTER TABLE leads ADD COLUMN verification_status TEXT DEFAULT 'unverified'");
     if (!cols.includes('verified_at')) db.exec("ALTER TABLE leads ADD COLUMN verified_at DATETIME");
     if (!cols.includes('verification_reason')) db.exec("ALTER TABLE leads ADD COLUMN verification_reason TEXT");
+    if (!cols.includes('notes')) db.exec("ALTER TABLE leads ADD COLUMN notes TEXT");
 
     // Contactability and verification columns on google_maps_leads table
     const mapsCols = db.prepare('PRAGMA table_info(google_maps_leads)').all().map(c => c.name);
@@ -601,6 +602,10 @@ export const LeadModel = {
 
   updateComment: (id, comment) => {
     return db.prepare('UPDATE leads SET ai_comment = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(comment, id);
+  },
+
+  updateNotes: (id, notes) => {
+    return db.prepare('UPDATE leads SET notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(notes, id);
   },
 
   getAll: (options = {}) => {
