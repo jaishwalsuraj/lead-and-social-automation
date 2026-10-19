@@ -289,6 +289,12 @@ export function initDatabase() {
     if (!scCols.includes('pdf_path')) db.exec("ALTER TABLE scorecard_leads ADD COLUMN pdf_path TEXT");
     if (!scCols.includes('pdf_url')) db.exec("ALTER TABLE scorecard_leads ADD COLUMN pdf_url TEXT");
 
+    // Users password reset and recovery key columns
+    const userCols = db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
+    if (!userCols.includes('reset_token')) db.exec('ALTER TABLE users ADD COLUMN reset_token TEXT');
+    if (!userCols.includes('reset_expires')) db.exec('ALTER TABLE users ADD COLUMN reset_expires DATETIME');
+    if (!userCols.includes('recovery_key')) db.exec('ALTER TABLE users ADD COLUMN recovery_key TEXT');
+
     // Populate defaults for existing records
     db.exec(`
       UPDATE leads SET discovered_at = created_at WHERE discovered_at IS NULL;
@@ -432,23 +438,26 @@ export function initDatabase() {
     }
   }
 
-  // Seed default admin and assigned users if empty
-  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
-  if (userCount === 0) {
+  // Remove legacy accounts and ensure Super Admin dmsuraj3@gmail.com is established
+  db.prepare("DELETE FROM users WHERE username IN ('admin', 'assigned')").run();
+
+  const superAdmin = db.prepare("SELECT * FROM users WHERE LOWER(username) = 'dmsuraj3@gmail.com' OR LOWER(email) = 'dmsuraj3@gmail.com'").get();
+  if (!superAdmin) {
+    const initialPassword = process.env.INITIAL_ADMIN_PASSWORD || 'SurajFrog2026!#';
+    const recoveryKey = process.env.ADMIN_RECOVERY_KEY || 'FROG-SURAJ-9921';
     UserModel.create({
-      username: 'admin',
-      password: 'admin123',
+      username: 'dmsuraj3@gmail.com',
+      password: initialPassword,
       role: 'admin',
-      name: 'Lead & Social Admin',
-      email: 'admin@thedigitalfrog.com'
+      name: 'Suraj Jaiswal',
+      email: 'dmsuraj3@gmail.com',
+      recoveryKey: recoveryKey
     });
-    UserModel.create({
-      username: 'assigned',
-      password: 'assigned123',
-      role: 'assigned',
-      name: 'Growth Specialist',
-      email: 'team@thedigitalfrog.com'
-    });
+    console.log('👑 Super Admin account created: dmsuraj3@gmail.com');
+  } else {
+    if (!superAdmin.recovery_key) {
+      db.prepare("UPDATE users SET recovery_key = ? WHERE id = ?").run('FROG-SURAJ-9921', superAdmin.id);
+    }
   }
 }
 
@@ -469,23 +478,31 @@ export function verifyPassword(password, hash, salt) {
 }
 
 export const UserModel = {
-  create: ({ username, password, role = 'assigned', name, email = null }) => {
+  create: ({ username, password, role = 'assigned', name, email = null, recoveryKey = null }) => {
     const { hash, salt } = hashPassword(password);
+    const recKey = recoveryKey || `FROG-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     const stmt = db.prepare(`
-      INSERT INTO users (username, password_hash, salt, role, name, email)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO users (username, password_hash, salt, role, name, email, recovery_key)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    const info = stmt.run(username.toLowerCase().trim(), hash, salt, role, name || username, email);
+    const info = stmt.run(username.toLowerCase().trim(), hash, salt, role, name || username, email ? email.toLowerCase().trim() : null, recKey);
     return info.lastInsertRowid;
   },
 
-  findByUsername: (username) => {
-    if (!username) return null;
-    return db.prepare('SELECT * FROM users WHERE LOWER(username) = LOWER(?)').get(username.trim());
+  findByUsername: (identifier) => {
+    if (!identifier) return null;
+    const clean = identifier.trim().toLowerCase();
+    return db.prepare('SELECT * FROM users WHERE LOWER(username) = ? OR LOWER(email) = ?').get(clean, clean);
+  },
+
+  findByEmail: (email) => {
+    if (!email) return null;
+    const clean = email.trim().toLowerCase();
+    return db.prepare('SELECT * FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?').get(clean, clean);
   },
 
   findById: (id) => {
-    return db.prepare('SELECT id, username, role, name, email, created_at, last_login FROM users WHERE id = ?').get(id);
+    return db.prepare('SELECT id, username, role, name, email, recovery_key, created_at, last_login FROM users WHERE id = ?').get(id);
   },
 
   getAll: () => {
@@ -499,7 +516,24 @@ export const UserModel = {
 
   updatePassword: (id, newPassword) => {
     const { hash, salt } = hashPassword(newPassword);
-    return db.prepare('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?').run(hash, salt, id);
+    return db.prepare('UPDATE users SET password_hash = ?, salt = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?').run(hash, salt, id);
+  },
+
+  setResetToken: (id, token, expiresAt) => {
+    return db.prepare('UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?').run(token, expiresAt, id);
+  },
+
+  clearResetToken: (id) => {
+    return db.prepare('UPDATE users SET reset_token = NULL, reset_expires = NULL WHERE id = ?').run(id);
+  },
+
+  setRecoveryKey: (id, key) => {
+    return db.prepare('UPDATE users SET recovery_key = ? WHERE id = ?').run(key, id);
+  },
+
+  getRecoveryKey: (id) => {
+    const row = db.prepare('SELECT recovery_key FROM users WHERE id = ?').get(id);
+    return row ? row.recovery_key : null;
   },
 
   updateLastLogin: (id) => {

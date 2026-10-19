@@ -166,6 +166,95 @@ app.delete('/api/auth/users/:id', requireAuth, requireAdmin, (req, res) => {
   }
 });
 
+// Request password reset verification code
+app.post('/api/auth/forgot-password', (req, res) => {
+  const { email, identifier } = req.body;
+  const target = (email || identifier || '').trim();
+  if (!target) {
+    return res.status(400).json({ error: 'Please enter your registered email or username' });
+  }
+
+  const user = UserModel.findByEmail(target) || UserModel.findByUsername(target);
+  if (!user) {
+    return res.status(404).json({ error: 'No account registered with this email or username' });
+  }
+
+  // Generate secure 6-digit OTP code (valid for 15 minutes)
+  const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+  UserModel.setResetToken(user.id, resetCode, expiresAt);
+  LogModel.add('security', 'password_reset_requested', `Password reset code generated for ${user.email || user.username}`);
+
+  console.log(`\n======================================================`);
+  console.log(`🔐 [SECURITY] PASSWORD RESET REQUESTED FOR: ${user.email}`);
+  console.log(`👉 6-DIGIT VERIFICATION CODE: ${resetCode}`);
+  console.log(`👉 MASTER RECOVERY KEY:        ${user.recovery_key}`);
+  console.log(`⏰ CODE EXPIRES IN:           15 MINUTES`);
+  console.log(`======================================================\n`);
+
+  res.json({
+    success: true,
+    message: 'Reset verification code generated (valid for 15 minutes). Use your 6-digit OTP code or Master Recovery Key to complete the reset.',
+    email: user.email,
+    expiresInMinutes: 15
+  });
+});
+
+// Complete password reset using 6-digit OTP code or Master Recovery Key
+app.post('/api/auth/reset-password', (req, res) => {
+  const { identifier, email, resetCode, newPassword } = req.body;
+  const target = (identifier || email || '').trim();
+  const code = (resetCode || '').trim();
+
+  if (!target) {
+    return res.status(400).json({ error: 'Email or username is required' });
+  }
+  if (!code) {
+    return res.status(400).json({ error: 'Reset verification code or recovery key is required' });
+  }
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  }
+
+  const user = UserModel.findByEmail(target) || UserModel.findByUsername(target);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  // Verify code against either permanent recovery_key or active time-limited reset_token
+  const isMasterKey = user.recovery_key && user.recovery_key.toUpperCase() === code.toUpperCase();
+  const isOtpValid = user.reset_token && user.reset_token === code && user.reset_expires && new Date(user.reset_expires) > new Date();
+
+  if (!isMasterKey && !isOtpValid) {
+    return res.status(400).json({ error: 'Invalid or expired verification code / recovery key' });
+  }
+
+  UserModel.updatePassword(user.id, newPassword);
+  UserModel.updateLastLogin(user.id);
+  const token = createAuthToken(user);
+  LogModel.add('security', 'password_reset_success', `Password successfully reset for ${user.email || user.username}`);
+
+  res.json({
+    success: true,
+    message: 'Password updated successfully! Welcome back.',
+    token,
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      name: user.name,
+      email: user.email
+    }
+  });
+});
+
+// Get Master Recovery Key for Super Admin (Admin only)
+app.get('/api/auth/recovery-key', requireAuth, requireAdmin, (req, res) => {
+  const key = UserModel.getRecoveryKey(req.user.id);
+  res.json({ recoveryKey: key });
+});
+
 // Change user password
 app.post('/api/auth/change-password', requireAuth, (req, res) => {
   const { currentPassword, newPassword, targetUserId } = req.body;
@@ -179,10 +268,11 @@ app.post('/api/auth/change-password', requireAuth, (req, res) => {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
   }
-  if (!newPassword || newPassword.length < 5) {
-    return res.status(400).json({ error: 'New password must be at least 5 characters' });
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters' });
   }
   UserModel.updatePassword(targetId, newPassword);
+  LogModel.add('security', 'password_change', `Password changed for user ${user.username}`);
   res.json({ success: true, message: 'Password updated successfully' });
 });
 

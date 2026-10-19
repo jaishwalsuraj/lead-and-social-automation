@@ -3,7 +3,20 @@ let currentUser = null;
 let authToken = localStorage.getItem('tg_auth_token') || null;
 
 // Intercept window.fetch to automatically attach Bearer token and handle 401s
-const _rawFetch = window.fetch;
+const _nativeFetch = window.fetch.bind(window);
+const _rawFetch = async function(url, options = {}) {
+  try {
+    return await _nativeFetch(url, options);
+  } catch (err) {
+    if (typeof url === 'string' && url.startsWith('/') && window.location.hostname.includes('netlify.app')) {
+      const fallbackUrl = `https://crm.thedigitalfrog.com${url}`;
+      console.warn(`[Netlify Fallback] Failed fetching ${url}, retrying direct to ${fallbackUrl}`);
+      return await _nativeFetch(fallbackUrl, options);
+    }
+    throw err;
+  }
+};
+
 window.fetch = async function (url, options = {}) {
   options = options || {};
   options.headers = options.headers || {};
@@ -20,9 +33,14 @@ window.fetch = async function (url, options = {}) {
 
   try {
     const res = await _rawFetch(url, options);
-    // If 401 Unauthorized, intercept and prompt login overlay (excluding login endpoint itself or public scorecard config/submit)
+    // If 401 Unauthorized, intercept and prompt login overlay (excluding login, password reset, or public scorecard)
     if (res.status === 401 && typeof url === 'string') {
-      const isPublic = url.includes('/api/auth/login') || url.includes('/api/scorecard/config') || url.includes('/api/scorecard/submit') || url.includes('/prescriptions/');
+      const isPublic = url.includes('/api/auth/login') || 
+                       url.includes('/api/auth/forgot-password') || 
+                       url.includes('/api/auth/reset-password') || 
+                       url.includes('/api/scorecard/config') || 
+                       url.includes('/api/scorecard/submit') || 
+                       url.includes('/prescriptions/');
       if (!isPublic) {
         console.warn('[Auth Interceptor] 401 Unauthorized on:', url);
         showLoginOverlay('Session expired or login required. Please sign in.');
@@ -97,26 +115,179 @@ function hideLoginOverlay() {
   if (overlay) overlay.style.display = 'none';
 }
 
-function quickFillLogin(role) {
-  const usernameInput = document.getElementById('login-username');
-  const passwordInput = document.getElementById('login-password');
+function showForgotPasswordView(e) {
+  if (e) e.preventDefault();
+  const loginFormWrap = document.getElementById('login-view-form');
+  const forgotPwWrap = document.getElementById('forgot-pw-view');
   const errorAlert = document.getElementById('login-error-alert');
   if (errorAlert) errorAlert.style.display = 'none';
 
-  if (role === 'admin') {
-    if (usernameInput) usernameInput.value = 'admin';
-    if (passwordInput) passwordInput.value = 'admin123';
-  } else if (role === 'assigned') {
-    if (usernameInput) usernameInput.value = 'assigned';
-    if (passwordInput) passwordInput.value = 'assigned123';
-  }
-  if (passwordInput) passwordInput.focus();
+  if (loginFormWrap) loginFormWrap.style.display = 'none';
+  if (forgotPwWrap) forgotPwWrap.style.display = 'block';
+
+  const resetIdentifier = document.getElementById('reset-identifier');
+  if (resetIdentifier) resetIdentifier.focus();
+}
+
+function showLoginView(e) {
+  if (e) e.preventDefault();
+  const loginFormWrap = document.getElementById('login-view-form');
+  const forgotPwWrap = document.getElementById('forgot-pw-view');
+  const errorAlert = document.getElementById('login-error-alert');
+  if (errorAlert) errorAlert.style.display = 'none';
+
+  if (forgotPwWrap) forgotPwWrap.style.display = 'none';
+  if (loginFormWrap) loginFormWrap.style.display = 'block';
+
+  const usernameInput = document.getElementById('login-username');
+  if (usernameInput) usernameInput.focus();
+}
+
+function togglePasswordVisibilityById(id) {
+  const input = document.getElementById(id);
+  if (!input) return;
+  input.type = input.type === 'password' ? 'text' : 'password';
 }
 
 function toggleLoginPasswordVisibility() {
   const pwInput = document.getElementById('login-password');
   if (!pwInput) return;
   pwInput.type = pwInput.type === 'password' ? 'text' : 'password';
+}
+
+async function requestResetCode() {
+  const identifierInput = document.getElementById('reset-identifier');
+  const btn = document.getElementById('btn-request-code');
+  const statusDiv = document.getElementById('reset-code-status');
+  const errorAlert = document.getElementById('login-error-alert');
+  const errorText = document.getElementById('login-error-text');
+
+  const email = identifierInput ? identifierInput.value.trim() : '';
+  if (!email) {
+    if (errorText) errorText.innerText = 'Please enter your registered Super Admin email.';
+    if (errorAlert) errorAlert.style.display = 'flex';
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = 'Requesting OTP... ⏳';
+  }
+  if (errorAlert) errorAlert.style.display = 'none';
+
+  try {
+    const res = await _rawFetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      if (statusDiv) {
+        statusDiv.style.display = 'block';
+        statusDiv.style.color = '#10b981';
+        statusDiv.innerHTML = `✅ <strong>Code generated!</strong> Check server terminal/logs or enter your <strong>Master Recovery Key</strong> below.`;
+      }
+      showLeadNotificationToast('🔑 Verification Code Generated', 'Check server terminal or use your Master Recovery Key.');
+    } else {
+      if (errorText) errorText.innerText = data.error || 'Unable to request password reset code.';
+      if (errorAlert) errorAlert.style.display = 'flex';
+    }
+  } catch (err) {
+    console.error('Request reset code error:', err);
+    if (errorText) errorText.innerText = 'Connection error. Please try again.';
+    if (errorAlert) errorAlert.style.display = 'flex';
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = 'Request 6-Digit OTP 📩';
+    }
+  }
+}
+
+async function doPasswordReset(e) {
+  if (e) e.preventDefault();
+  const identifierInput = document.getElementById('reset-identifier');
+  const codeInput = document.getElementById('reset-code');
+  const newPwInput = document.getElementById('reset-new-password');
+  const confirmPwInput = document.getElementById('reset-confirm-password');
+  const errorAlert = document.getElementById('login-error-alert');
+  const errorText = document.getElementById('login-error-text');
+  const submitBtn = document.getElementById('btn-submit-reset');
+
+  const identifier = identifierInput ? identifierInput.value.trim() : '';
+  const resetCode = codeInput ? codeInput.value.trim() : '';
+  const newPassword = newPwInput ? newPwInput.value : '';
+  const confirmPassword = confirmPwInput ? confirmPwInput.value : '';
+
+  if (!identifier || !resetCode || !newPassword) {
+    if (errorText) errorText.innerText = 'Please fill out all fields.';
+    if (errorAlert) errorAlert.style.display = 'flex';
+    return;
+  }
+
+  if (newPassword.length < 6) {
+    if (errorText) errorText.innerText = 'New password must be at least 6 characters.';
+    if (errorAlert) errorAlert.style.display = 'flex';
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    if (errorText) errorText.innerText = 'New passwords do not match.';
+    if (errorAlert) errorAlert.style.display = 'flex';
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span>Verifying & Resetting... ⏳</span>';
+  }
+  if (errorAlert) errorAlert.style.display = 'none';
+
+  try {
+    const res = await _rawFetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, resetCode, newPassword })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success && data.token) {
+      authToken = data.token;
+      currentUser = data.user;
+      localStorage.setItem('tg_auth_token', authToken);
+      hideLoginOverlay();
+      showLoginView();
+      applyRolePermissions();
+      showLeadNotificationToast(`🎉 Password Reset Complete!`, `Signed in as ${currentUser.name || currentUser.username}.`);
+
+      // Initialize all live feeds
+      initWebSocket();
+      checkPlatformStatuses(false);
+      loadSearchKeywords();
+      loadStats();
+      loadLeads();
+      if (currentUser.role === 'admin') {
+        loadSettings();
+      }
+      loadTunnelStatus();
+      checkCdpStatus();
+      loadMapsStats();
+      loadScorecardStats();
+    } else {
+      if (errorText) errorText.innerText = data.error || 'Failed to reset password. Check your code or key.';
+      if (errorAlert) errorAlert.style.display = 'flex';
+    }
+  } catch (err) {
+    console.error('Password reset error:', err);
+    if (errorText) errorText.innerText = 'Server connection error during reset. Please try again.';
+    if (errorAlert) errorAlert.style.display = 'flex';
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<span>Set New Password & Sign In 🔐</span>';
+    }
+  }
 }
 
 async function doLogin(e) {
@@ -131,7 +302,7 @@ async function doLogin(e) {
   const password = passwordInput ? passwordInput.value : '';
 
   if (!username || !password) {
-    if (errorText) errorText.innerText = 'Please enter both username and password.';
+    if (errorText) errorText.innerText = 'Please enter both username/email and password.';
     if (errorAlert) errorAlert.style.display = 'flex';
     return;
   }
@@ -177,7 +348,7 @@ async function doLogin(e) {
         switchTab(hashTab, false);
       }
     } else {
-      if (errorText) errorText.innerText = data.error || 'Invalid username or password.';
+      if (errorText) errorText.innerText = data.error || 'Invalid email/username or password.';
       if (errorAlert) errorAlert.style.display = 'flex';
       if (passwordInput) passwordInput.value = '';
     }
@@ -372,6 +543,114 @@ async function deleteTeamUser(id, username) {
   } catch (err) {
     console.error('Delete user error:', err);
     alert('Error deleting user');
+  }
+}
+
+// ==================== SUPER ADMIN SECURITY & RECOVERY KEY ====================
+let currentRecoveryKey = '';
+let isRecoveryKeyRevealed = false;
+
+async function loadSuperAdminSecurity() {
+  const displaySpan = document.getElementById('display-recovery-key');
+  if (!displaySpan) return;
+
+  try {
+    const res = await fetch('/api/auth/recovery-key');
+    if (res.ok) {
+      const data = await res.json();
+      currentRecoveryKey = data.recoveryKey || 'FROG-SURAJ-9921';
+      displaySpan.innerText = isRecoveryKeyRevealed ? currentRecoveryKey : '••••-••••-••••';
+    }
+  } catch (err) {
+    console.error('Failed to load recovery key:', err);
+  }
+}
+
+function toggleRevealRecoveryKey() {
+  const displaySpan = document.getElementById('display-recovery-key');
+  const btn = document.getElementById('btn-reveal-key');
+  if (!displaySpan || !currentRecoveryKey) return;
+
+  isRecoveryKeyRevealed = !isRecoveryKeyRevealed;
+  displaySpan.innerText = isRecoveryKeyRevealed ? currentRecoveryKey : '••••-••••-••••';
+  if (btn) {
+    btn.innerText = isRecoveryKeyRevealed ? 'Hide 🔒' : 'Reveal 👁️';
+  }
+}
+
+async function copyRecoveryKey() {
+  if (!currentRecoveryKey) {
+    await loadSuperAdminSecurity();
+  }
+  if (!currentRecoveryKey) {
+    alert('Recovery key not loaded yet.');
+    return;
+  }
+  const copied = await copyToClipboard(currentRecoveryKey);
+  if (copied) {
+    showLeadNotificationToast('📋 Recovery Key Copied', 'Stored in clipboard. Keep it safely in your password manager!');
+  } else {
+    alert(`Your Master Recovery Key is: ${currentRecoveryKey}`);
+  }
+}
+
+async function doSettingsChangePassword(e) {
+  if (e) e.preventDefault();
+  const currentInput = document.getElementById('change-pw-current');
+  const newInput = document.getElementById('change-pw-new');
+  const confirmInput = document.getElementById('change-pw-confirm');
+  const statusSpan = document.getElementById('admin-security-status');
+  const btn = document.getElementById('btn-submit-change-pw');
+
+  const currentPassword = currentInput ? currentInput.value : '';
+  const newPassword = newInput ? newInput.value : '';
+  const confirmPassword = confirmInput ? confirmInput.value : '';
+
+  if (!currentPassword || !newPassword) {
+    alert('Please enter both your current password and a new password.');
+    return;
+  }
+  if (newPassword.length < 6) {
+    alert('New password must be at least 6 characters long.');
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    alert('New passwords do not match. Please verify.');
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>Updating Password... ⏳</span>';
+  }
+
+  try {
+    const res = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      if (statusSpan) {
+        statusSpan.innerText = '✅ Password updated!';
+        setTimeout(() => { if (statusSpan) statusSpan.innerText = ''; }, 4000);
+      }
+      showLeadNotificationToast('🔐 Password Changed', 'Your Super Admin password was updated successfully.');
+      if (currentInput) currentInput.value = '';
+      if (newInput) newInput.value = '';
+      if (confirmInput) confirmInput.value = '';
+    } else {
+      alert(data.error || 'Failed to update password');
+    }
+  } catch (err) {
+    console.error('Change password error:', err);
+    alert('Error updating password');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>Update Password 🔒</span>';
+    }
   }
 }
 
@@ -2059,6 +2338,8 @@ async function restartTunnel() {
 
 async function loadSettings() {
   try {
+    loadSuperAdminSecurity();
+    loadTeamUsers();
     const res = await fetch('/api/settings');
     const settings = await res.json();
 

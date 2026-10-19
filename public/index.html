@@ -842,6 +842,66 @@
           </form>
         </div>
 
+        <!-- Super Admin Security & Password Change -->
+        <div class="panel-card mb-4" id="section-admin-security" style="border: 1px solid rgba(168, 85, 247, 0.35); background: linear-gradient(135deg, rgba(30, 27, 75, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);">
+          <div class="panel-header">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="user-role-chip role-admin" style="font-size: 0.72rem; padding: 2px 8px;">👑 SUPER ADMIN</span>
+                <h2>Security & Password Management</h2>
+              </div>
+              <p class="subtitle">Update your Super Admin password (dmsuraj3@gmail.com) and manage your Master Recovery Key.</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span id="admin-security-status" style="font-size: 0.8rem; color: #10b981; font-weight: 600;"></span>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-top: 1rem;">
+            <!-- Change Password Form -->
+            <form id="form-change-password" onsubmit="doSettingsChangePassword(event)" style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 1.25rem;">
+              <div style="font-weight: 700; color: #f8fafc; font-size: 0.9rem; margin-bottom: 1rem;">🔐 Change Super Admin Password</div>
+              <div class="form-group">
+                <label for="change-pw-current">Current Password</label>
+                <input type="password" id="change-pw-current" placeholder="Enter current password" required>
+              </div>
+              <div class="form-group">
+                <label for="change-pw-new">New Password</label>
+                <input type="password" id="change-pw-new" placeholder="Minimum 6 characters" required>
+              </div>
+              <div class="form-group">
+                <label for="change-pw-confirm">Confirm New Password</label>
+                <input type="password" id="change-pw-confirm" placeholder="Repeat new password" required>
+              </div>
+              <button type="submit" class="btn btn-primary" id="btn-submit-change-pw" style="width: 100%;">
+                <span>Update Password 🔒</span>
+              </button>
+            </form>
+
+            <!-- Master Recovery Key Card -->
+            <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 1.25rem; display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.5rem;">
+                  <span style="font-size: 1.1rem;">🛡️</span>
+                  <div style="font-weight: 700; color: #f8fafc; font-size: 0.9rem;">Master Recovery Key</div>
+                </div>
+                <p style="font-size: 0.8rem; color: #94a3b8; line-height: 1.5; margin-bottom: 1rem;">
+                  Your permanent offline key to reset your password if you ever get locked out. Keep this safe in your password manager.
+                </p>
+                <div style="background: rgba(2, 6, 23, 0.8); border: 1px dashed rgba(168, 85, 247, 0.5); border-radius: 8px; padding: 0.85rem; font-family: monospace; font-size: 1rem; color: #d8b4fe; letter-spacing: 0.08em; display: flex; justify-content: space-between; align-items: center;">
+                  <span id="display-recovery-key">••••-••••-••••</span>
+                  <button type="button" class="btn btn-xs btn-outline" onclick="toggleRevealRecoveryKey()" id="btn-reveal-key">Reveal 👁️</button>
+                </div>
+              </div>
+              <div style="margin-top: 1.25rem; display: flex; gap: 8px;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="copyRecoveryKey()" id="btn-copy-rec-key" style="flex: 1;">
+                  <span>📋 Copy Recovery Key</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Team & User Access Management (Admin only) -->
         <div class="panel-card mb-4" id="section-user-mgmt">
           <div class="panel-header">
@@ -1453,36 +1513,82 @@
           <span id="login-error-text">Invalid username or password</span>
         </div>
 
-        <!-- Quick Fill Role Chips -->
-        <div class="login-quick-chips">
-          <button type="button" class="login-chip-btn login-chip-admin" onclick="quickFillLogin('admin')" title="Auto-fill admin credentials">
-            <span>👑 Quick: Admin</span>
-          </button>
-          <button type="button" class="login-chip-btn login-chip-assigned" onclick="quickFillLogin('assigned')" title="Auto-fill assigned outreach specialist credentials">
-            <span>👤 Quick: Assigned</span>
-          </button>
+        <div id="login-view-form">
+          <form id="login-form" onsubmit="doLogin(event)">
+            <div class="login-field">
+              <label class="login-label" for="login-username">Super Admin Email / Username</label>
+              <div class="login-input-wrap">
+                <input type="text" id="login-username" class="login-input" placeholder="dmsuraj3@gmail.com" autocomplete="username" required autofocus>
+              </div>
+            </div>
+
+            <div class="login-field">
+              <label class="login-label" for="login-password">Password</label>
+              <div class="login-input-wrap">
+                <input type="password" id="login-password" class="login-input" placeholder="Enter your password" autocomplete="current-password" required>
+                <button type="button" class="login-toggle-pw" onclick="toggleLoginPasswordVisibility()" title="Show/Hide Password">👁️</button>
+              </div>
+            </div>
+
+            <div class="login-extra-row" style="display: flex; justify-content: flex-end; margin-top: -0.4rem; margin-bottom: 1.25rem;">
+              <a href="#" onclick="showForgotPasswordView(event)" class="login-forgot-link" style="font-size: 0.82rem; color: #38bdf8; text-decoration: none; font-weight: 600;">Forgot Password? 🔑</a>
+            </div>
+
+            <button type="submit" class="login-submit-btn" id="btn-submit-login">
+              <span>Sign In to Growth Hub 🚀</span>
+            </button>
+          </form>
         </div>
 
-        <form id="login-form" onsubmit="doLogin(event)">
-          <div class="login-field">
-            <label class="login-label" for="login-username">Username</label>
-            <div class="login-input-wrap">
-              <input type="text" id="login-username" class="login-input" placeholder="e.g. admin or assigned" autocomplete="username" required autofocus>
-            </div>
+        <!-- Forgot / Reset Password View -->
+        <div id="forgot-pw-view" style="display: none;">
+          <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 1.25rem; line-height: 1.5; text-align: center;">
+            Enter your Super Admin email and <strong>6-digit OTP code</strong> or <strong>Master Recovery Key</strong> to reset your password.
           </div>
-
-          <div class="login-field">
-            <label class="login-label" for="login-password">Password</label>
-            <div class="login-input-wrap">
-              <input type="password" id="login-password" class="login-input" placeholder="Enter your password" autocomplete="current-password" required>
-              <button type="button" class="login-toggle-pw" onclick="toggleLoginPasswordVisibility()" title="Show/Hide Password">👁️</button>
+          <form id="forgot-pw-form" onsubmit="doPasswordReset(event)">
+            <div class="login-field">
+              <label class="login-label" for="reset-identifier">Super Admin Email / Username</label>
+              <div class="login-input-wrap">
+                <input type="text" id="reset-identifier" class="login-input" placeholder="dmsuraj3@gmail.com" required value="dmsuraj3@gmail.com">
+              </div>
             </div>
-          </div>
 
-          <button type="submit" class="login-submit-btn" id="btn-submit-login">
-            <span>Sign In to Growth Hub 🚀</span>
-          </button>
-        </form>
+            <div class="login-field">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
+                <label class="login-label" for="reset-code" style="margin: 0;">Verification Code / Recovery Key</label>
+                <button type="button" class="btn-text-link" onclick="requestResetCode()" id="btn-request-code" style="background: none; border: none; color: #10b981; font-size: 0.78rem; font-weight: 700; cursor: pointer; padding: 0;">Request 6-Digit OTP 📩</button>
+              </div>
+              <div class="login-input-wrap">
+                <input type="text" id="reset-code" class="login-input" placeholder="6-digit code or Master Recovery Key" required>
+              </div>
+              <div id="reset-code-status" style="font-size: 0.75rem; color: #10b981; margin-top: 0.35rem; display: none;"></div>
+            </div>
+
+            <div class="login-field">
+              <label class="login-label" for="reset-new-password">New Password</label>
+              <div class="login-input-wrap">
+                <input type="password" id="reset-new-password" class="login-input" placeholder="Minimum 6 characters" required>
+                <button type="button" class="login-toggle-pw" onclick="togglePasswordVisibilityById('reset-new-password')" title="Show/Hide">👁️</button>
+              </div>
+            </div>
+
+            <div class="login-field">
+              <label class="login-label" for="reset-confirm-password">Confirm New Password</label>
+              <div class="login-input-wrap">
+                <input type="password" id="reset-confirm-password" class="login-input" placeholder="Repeat new password" required>
+                <button type="button" class="login-toggle-pw" onclick="togglePasswordVisibilityById('reset-confirm-password')" title="Show/Hide">👁️</button>
+              </div>
+            </div>
+
+            <button type="submit" class="login-submit-btn" id="btn-submit-reset">
+              <span>Set New Password & Sign In 🔐</span>
+            </button>
+
+            <div style="text-align: center; margin-top: 1.15rem;">
+              <a href="#" onclick="showLoginView(event)" class="login-forgot-link" style="font-size: 0.82rem; color: #94a3b8; text-decoration: none;">← Back to Sign In</a>
+            </div>
+          </form>
+        </div>
 
         <div class="login-footer-notice">
           <div>🩺 <strong>Public Scorecard Diagnostics:</strong></div>
