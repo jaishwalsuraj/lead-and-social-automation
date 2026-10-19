@@ -377,12 +377,16 @@
               <option value="facebook">👥 Facebook</option>
               <option value="linkedin">💼 LinkedIn</option>
             </select>
-            <select id="filter-sort" onchange="sortAndFilterLeads()" title="Order CRM leads">
-              <option value="newest" selected>⚡ Sort: Newest First</option>
-              <option value="intent">🔥 Sort: Highest Intent Score</option>
-              <option value="freshness">⏱️ Sort: Post Published Date</option>
-              <option value="status">📊 Sort: Pipeline Stage</option>
+            <select id="filter-sort" onchange="sortAndFilterLeads()" title="Order CRM leads by date or metrics">
+              <option value="newest" selected>📅 Date: Newest First (Descending ⬇️)</option>
+              <option value="oldest">📅 Date: Oldest First (Ascending ⬆️)</option>
+              <option value="intent">🔥 Highest Intent Score</option>
+              <option value="freshness">⏱️ Post Published Date</option>
+              <option value="status">📊 Pipeline Stage</option>
             </select>
+            <button type="button" class="btn btn-sm btn-outline" id="btn-sort-direction" onclick="toggleSortDirection()" title="Quick toggle date order: Newest First (Descending) / Oldest First (Ascending)" style="font-weight: 600; padding: 6px 12px;">
+              ⬇️ Newest First
+            </button>
             <select id="filter-intent" onchange="filterLeads()" title="Filter by buying intent">
               <option value="all">All Intent Scores</option>
               <option value="high">High Intent (70%+)</option>
@@ -573,6 +577,13 @@
               <option value="interested">🎯 Interested</option>
               <option value="closed">🏆 Closed Client</option>
             </select>
+            <select id="maps-filter-sort" onchange="loadMapsLeads()" title="Order Google Maps leads">
+              <option value="newest" selected>📅 Date: Newest First (Descending ⬇️)</option>
+              <option value="oldest">📅 Date: Oldest First (Ascending ⬆️)</option>
+              <option value="opportunity_desc">🔥 Highest Opportunity Score</option>
+              <option value="reviews_asc">⭐ Fewest Reviews (High Need)</option>
+              <option value="rating_asc">📉 Lowest Rating</option>
+            </select>
             <input type="text" id="maps-search-input" placeholder="🔍 Search business name, city, phone, email..." oninput="debounceMapsSearch()" class="maps-search-box">
           </div>
           <div class="maps-filters-right">
@@ -653,10 +664,11 @@
               <option value="converted">🏆 Converted Client</option>
             </select>
 
-            <select id="sc-filter-sort" class="filter-select" onchange="loadScorecardLeads()">
-              <option value="newest" selected>Newest First</option>
-              <option value="score_asc">Lowest Score First (Most Urgent)</option>
-              <option value="score_desc">Highest Score First</option>
+            <select id="sc-filter-sort" class="filter-select" onchange="loadScorecardLeads()" title="Order Scorecard leads">
+              <option value="newest" selected>📅 Date: Newest First (Descending ⬇️)</option>
+              <option value="oldest">📅 Date: Oldest First (Ascending ⬆️)</option>
+              <option value="score_asc">📉 Lowest Score First (Most Urgent)</option>
+              <option value="score_desc">📈 Highest Score First</option>
             </select>
           </div>
 

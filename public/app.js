@@ -1380,7 +1380,28 @@ function setPipelineStage(stage) {
 function sortAndFilterLeads() {
   const sortSelect = document.getElementById('filter-sort');
   if (sortSelect) currentSortBy = sortSelect.value;
+  const btn = document.getElementById('btn-sort-direction');
+  if (btn) {
+    if (currentSortBy === 'oldest' || currentSortBy === 'date_asc') {
+      btn.innerHTML = '⬆️ Oldest First';
+      btn.title = 'Switch to Newest First (Descending)';
+    } else {
+      btn.innerHTML = '⬇️ Newest First';
+      btn.title = 'Switch to Oldest First (Ascending)';
+    }
+  }
   filterLeads();
+}
+
+function toggleSortDirection() {
+  const sortSelect = document.getElementById('filter-sort');
+  if (!sortSelect) return;
+  if (sortSelect.value === 'newest' || sortSelect.value === 'date_desc') {
+    sortSelect.value = 'oldest';
+  } else {
+    sortSelect.value = 'newest';
+  }
+  sortAndFilterLeads();
 }
 
 function setLeadView(mode) {
@@ -1393,7 +1414,8 @@ function setLeadView(mode) {
 async function loadLeads() {
   try {
     const ageFilter = document.getElementById('filter-age')?.value || '7';
-    const res = await fetch(`/api/leads?limit=300&maxDays=${ageFilter}&connectedOnly=false`);
+    const sortBy = document.getElementById('filter-sort')?.value || 'newest';
+    const res = await fetch(`/api/leads?limit=300&maxDays=${ageFilter}&sortBy=${sortBy}&connectedOnly=false`);
     allLeads = await res.json();
     filterLeads();
     updatePipelineCounters();
@@ -1510,13 +1532,20 @@ function filterLeads() {
   // Apply sorting
   const sortBy = document.getElementById('filter-sort')?.value || currentSortBy || 'newest';
   filtered.sort((a, b) => {
-    if (sortBy === 'newest') {
-      const tA = new Date(a.discovered_at || a.created_at || 0).getTime();
-      const tB = new Date(b.discovered_at || b.created_at || 0).getTime();
+    if (sortBy === 'newest' || sortBy === 'date_desc') {
+      const tA = new Date(a.discovered_at || a.created_at || a.post_date || 0).getTime();
+      const tB = new Date(b.discovered_at || b.created_at || b.post_date || 0).getTime();
       return tB - tA;
     }
+    if (sortBy === 'oldest' || sortBy === 'date_asc') {
+      const tA = new Date(a.discovered_at || a.created_at || a.post_date || 0).getTime();
+      const tB = new Date(b.discovered_at || b.created_at || b.post_date || 0).getTime();
+      return tA - tB;
+    }
     if (sortBy === 'intent') {
-      return (b.intent_score || 0) - (a.intent_score || 0);
+      const diff = (b.intent_score || 0) - (a.intent_score || 0);
+      if (diff !== 0) return diff;
+      return new Date(b.discovered_at || b.created_at || 0) - new Date(a.discovered_at || a.created_at || 0);
     }
     if (sortBy === 'freshness') {
       return (a.post_age_days ?? 99) - (b.post_age_days ?? 99);
@@ -2805,6 +2834,7 @@ async function loadMapsLeads() {
   const websiteFilter = document.getElementById('maps-filter-website')?.value || 'all';
   const contactFilter = document.getElementById('maps-filter-contact')?.value || 'all';
   const statusFilter = document.getElementById('maps-filter-status')?.value || 'all';
+  const sortBy = document.getElementById('maps-filter-sort')?.value || 'newest';
   const searchQuery = document.getElementById('maps-search-input')?.value || '';
 
   const params = new URLSearchParams();
@@ -2815,6 +2845,7 @@ async function loadMapsLeads() {
   }
   if (contactFilter !== 'all') params.set('contact_method', contactFilter);
   if (statusFilter !== 'all') params.set('status', statusFilter);
+  if (sortBy) params.set('sortBy', sortBy);
   if (searchQuery) params.set('search', searchQuery);
 
   try {

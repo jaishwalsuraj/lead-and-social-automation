@@ -306,6 +306,11 @@ export function initDatabase() {
       UPDATE leads SET last_comment_url = post_url WHERE last_comment_url IS NULL AND status IN ('engaged', 'dm_sent', 'converted');
       UPDATE leads SET verification_status = 'verified' WHERE verification_status IS NULL AND status IN ('engaged', 'dm_sent', 'converted');
       UPDATE leads SET verification_status = 'dead' WHERE status = 'disqualified' AND feedback = 'incorrect';
+
+      // Enforce strict uniqueness: One prospect lead per author per platform
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_platform_handle 
+      ON leads(platform, LOWER(TRIM(author_handle))) 
+      WHERE author_handle IS NOT NULL AND TRIM(author_handle) != '';
     `);
   } catch (migErr) {
     console.warn('[DB Migration] Note on leads columns:', migErr.message);
@@ -570,6 +575,67 @@ export const LeadModel = {
     lead.last_comment_url = lead.last_comment_url || (['engaged', 'dm_sent'].includes(lead.status) ? lead.post_url : null);
     lead.last_dm = lead.last_dm || null;
 
+    // Strict duplicate check: by author_handle on same platform, OR by post_url
+    const cleanHandle = (lead.author_handle || '').trim().toLowerCase();
+    const cleanPlatform = (lead.platform || '').trim().toLowerCase();
+    const cleanUrl = lead.post_url ? lead.post_url.split('?')[0].split('#')[0].trim() : null;
+
+    let existing = null;
+    if (cleanHandle && cleanPlatform) {
+      existing = db.prepare('SELECT id, status, intent_score FROM leads WHERE LOWER(platform) = ? AND LOWER(TRIM(author_handle)) = ?').get(cleanPlatform, cleanHandle);
+    }
+    if (!existing && cleanUrl) {
+      existing = db.prepare('SELECT id, status, intent_score FROM leads WHERE post_url = ? OR post_url LIKE ?').get(cleanUrl, `${cleanUrl}%`);
+    }
+
+    if (existing) {
+      // NEVER insert duplicate! Update existing lead record with latest post activity
+      db.prepare(`
+        UPDATE leads SET
+          intent_score = MAX(leads.intent_score, ?),
+          intent_reason = COALESCE(?, leads.intent_reason),
+          post_text = COALESCE(?, leads.post_text),
+          ai_comment = COALESCE(?, leads.ai_comment),
+          post_date = COALESCE(?, leads.post_date),
+          post_time_text = COALESCE(?, leads.post_time_text),
+          post_age_days = COALESCE(?, leads.post_age_days),
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(
+        lead.intent_score || 0,
+        lead.intent_reason || null,
+        lead.post_text || null,
+        lead.ai_comment || null,
+        lead.post_date || null,
+        lead.post_time_text || null,
+        lead.post_age_days || 0,
+        existing.id
+      );
+      return { lastInsertRowid: existing.id, isDuplicate: true };
+    }
+
+    // Ensure all required/optional parameters are defined
+    const payload = {
+      platform: lead.platform || 'twitter',
+      author_name: lead.author_name || null,
+      author_handle: lead.author_handle || null,
+      author_url: lead.author_url || null,
+      post_url: lead.post_url || null,
+      post_text: lead.post_text || lead.post_content || '',
+      intent_score: lead.intent_score || 0,
+      intent_reason: lead.intent_reason || null,
+      keyword_matched: lead.keyword_matched || null,
+      status: lead.status || 'new',
+      ai_comment: lead.ai_comment || null,
+      last_dm: lead.last_dm || null,
+      post_date: lead.post_date || null,
+      post_time_text: lead.post_time_text || null,
+      post_age_days: lead.post_age_days !== undefined ? lead.post_age_days : 0,
+      discovered_at: lead.discovered_at || new Date().toISOString(),
+      reached_out_at: lead.reached_out_at || null,
+      last_comment_url: lead.last_comment_url || null
+    };
+
     const stmt = db.prepare(`
       INSERT INTO leads (
         platform, author_name, author_handle, author_url, post_url, post_text, 
@@ -581,19 +647,8 @@ export const LeadModel = {
         @intent_score, @intent_reason, @keyword_matched, @status, @ai_comment, @last_dm,
         @post_date, @post_time_text, @post_age_days, @discovered_at, @reached_out_at, @last_comment_url
       )
-      ON CONFLICT(post_url) DO UPDATE SET
-        intent_score = excluded.intent_score,
-        intent_reason = excluded.intent_reason,
-        ai_comment = COALESCE(excluded.ai_comment, leads.ai_comment),
-        post_date = COALESCE(excluded.post_date, leads.post_date),
-        post_time_text = COALESCE(excluded.post_time_text, leads.post_time_text),
-        post_age_days = COALESCE(excluded.post_age_days, leads.post_age_days),
-        discovered_at = COALESCE(leads.discovered_at, excluded.discovered_at),
-        reached_out_at = COALESCE(excluded.reached_out_at, leads.reached_out_at),
-        last_comment_url = COALESCE(excluded.last_comment_url, leads.last_comment_url),
-        updated_at = CURRENT_TIMESTAMP
     `);
-    return stmt.run(lead);
+    return stmt.run(payload);
   },
 
   getById: (id) => {
@@ -653,11 +708,14 @@ export const LeadModel = {
       params.push(options.verification_status);
     }
 
-    let orderBy = 'ORDER BY updated_at DESC, id DESC';
-    if (options.sortBy === 'newest') {
-      orderBy = 'ORDER BY COALESCE(discovered_at, created_at) DESC, id DESC';
+    // Default: Newest leads on top (Descending by discovery/created date)
+    let orderBy = 'ORDER BY COALESCE(discovered_at, created_at, post_date) DESC, id DESC';
+    if (options.sortBy === 'newest' || options.sortBy === 'date_desc') {
+      orderBy = 'ORDER BY COALESCE(discovered_at, created_at, post_date) DESC, id DESC';
+    } else if (options.sortBy === 'oldest' || options.sortBy === 'date_asc') {
+      orderBy = 'ORDER BY COALESCE(discovered_at, created_at, post_date) ASC, id ASC';
     } else if (options.sortBy === 'intent') {
-      orderBy = 'ORDER BY intent_score DESC, updated_at DESC';
+      orderBy = 'ORDER BY intent_score DESC, COALESCE(discovered_at, created_at) DESC';
     } else if (options.sortBy === 'freshness') {
       orderBy = 'ORDER BY post_age_days ASC, post_date DESC';
     } else if (options.sortBy === 'status') {
@@ -981,6 +1039,50 @@ export const GoogleMapsLeadModel = {
         updated_at = CURRENT_TIMESTAMP
     `);
 
+    const cleanName = (lead.business_name || '').trim().toLowerCase();
+    const cleanCity = (lead.city || '').trim().toLowerCase();
+    const cleanPhone = (lead.phone || '').trim().replace(/[^0-9+]/g, '');
+    const cleanUrl = lead.maps_url ? lead.maps_url.split('?')[0] : null;
+
+    let existing = null;
+    if (cleanPhone && cleanPhone.length > 6) {
+      existing = db.prepare('SELECT id FROM google_maps_leads WHERE REPLACE(REPLACE(phone, " ", ""), "-", "") = ?').get(cleanPhone);
+    }
+    if (!existing && cleanName && cleanCity) {
+      existing = db.prepare('SELECT id FROM google_maps_leads WHERE LOWER(TRIM(business_name)) = ? AND LOWER(TRIM(city)) = ?').get(cleanName, cleanCity);
+    }
+    if (!existing && cleanUrl) {
+      existing = db.prepare('SELECT id FROM google_maps_leads WHERE maps_url LIKE ?').get(`${cleanUrl}%`);
+    }
+
+    if (existing) {
+      // Update existing record without inserting duplicate
+      db.prepare(`
+        UPDATE google_maps_leads SET
+          rating = COALESCE(?, rating),
+          reviews_count = MAX(COALESCE(?, reviews_count), reviews_count),
+          phone = COALESCE(?, phone),
+          email = COALESCE(?, email),
+          website_url = COALESCE(?, website_url),
+          has_website = COALESCE(?, has_website),
+          whatsapp_url = COALESCE(?, whatsapp_url),
+          social_audit = COALESCE(?, social_audit),
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(
+        lead.rating ?? null,
+        lead.reviews_count || 0,
+        lead.phone || null,
+        lead.email || null,
+        lead.website_url || null,
+        lead.has_website ? 1 : 0,
+        lead.whatsapp_url || null,
+        typeof lead.social_audit === 'string' ? lead.social_audit : (lead.social_audit ? JSON.stringify(lead.social_audit) : null),
+        existing.id
+      );
+      return { lastInsertRowid: existing.id, isDuplicate: true };
+    }
+
     const cleanLead = {
       business_name: lead.business_name,
       category: lead.category || '',
@@ -1061,11 +1163,16 @@ export const GoogleMapsLeadModel = {
       params.push(s, s, s, s, s);
     }
 
-    let orderBy = 'ORDER BY opportunity_score DESC, updated_at DESC, id DESC';
-    if (options.sortBy === 'reviews_asc') {
-      orderBy = 'ORDER BY reviews_count ASC, opportunity_score DESC';
-    } else if (options.sortBy === 'newest') {
+    // Default: Newest leads strictly on top (Descending by discovered date)
+    let orderBy = 'ORDER BY discovered_at DESC, id DESC';
+    if (options.sortBy === 'oldest' || options.sortBy === 'date_asc') {
+      orderBy = 'ORDER BY discovered_at ASC, id ASC';
+    } else if (options.sortBy === 'newest' || options.sortBy === 'date_desc') {
       orderBy = 'ORDER BY discovered_at DESC, id DESC';
+    } else if (options.sortBy === 'opportunity_desc') {
+      orderBy = 'ORDER BY opportunity_score DESC, discovered_at DESC';
+    } else if (options.sortBy === 'reviews_asc') {
+      orderBy = 'ORDER BY reviews_count ASC, opportunity_score DESC';
     } else if (options.sortBy === 'rating_asc') {
       orderBy = 'ORDER BY rating ASC, reviews_count ASC';
     }
@@ -1216,6 +1323,63 @@ export const GoogleMapsLeadModel = {
 
 export const ScorecardLeadModel = {
   create: (data) => {
+    const cleanName = (data.business_name || '').trim().toLowerCase();
+    const cleanPerson = (data.contact_person || '').trim().toLowerCase();
+    const cleanPhone = (data.phone || '').trim().replace(/[^0-9+]/g, '');
+    const cleanEmail = (data.email || '').trim().toLowerCase();
+
+    // Prevent duplicate entries for the same lead
+    let existing = null;
+    if (cleanPhone && cleanPhone.length > 6) {
+      existing = db.prepare("SELECT id FROM scorecard_leads WHERE REPLACE(REPLACE(phone, ' ', ''), '-', '') = ?").get(cleanPhone);
+    }
+    if (!existing && cleanEmail) {
+      existing = db.prepare('SELECT id FROM scorecard_leads WHERE LOWER(email) = ?').get(cleanEmail);
+    }
+    if (!existing && cleanName && cleanPerson) {
+      existing = db.prepare('SELECT id FROM scorecard_leads WHERE LOWER(TRIM(business_name)) = ? AND LOWER(TRIM(contact_person)) = ?').get(cleanName, cleanPerson);
+    }
+
+    if (existing) {
+      // Update existing lead record instead of creating a duplicate
+      db.prepare(`
+        UPDATE scorecard_leads SET
+          overall_score = ?,
+          video_score = ?,
+          discovery_score = ?,
+          conversion_score = ?,
+          answers = ?,
+          prescription_text = ?,
+          prescription_data = ?,
+          city = COALESCE(?, city),
+          consultation_fee = COALESCE(?, consultation_fee),
+          work_timing = COALESCE(?, work_timing),
+          phone = COALESCE(?, phone),
+          email = COALESCE(?, email),
+          pdf_path = COALESCE(?, pdf_path),
+          pdf_url = COALESCE(?, pdf_url),
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(
+        data.overall_score || 0,
+        data.video_score || 0,
+        data.discovery_score || 0,
+        data.conversion_score || 0,
+        typeof data.answers === 'string' ? data.answers : JSON.stringify(data.answers || {}),
+        data.prescription_text || '',
+        typeof data.prescription_data === 'string' ? data.prescription_data : JSON.stringify(data.prescription_data || {}),
+        data.city || null,
+        data.consultation_fee || null,
+        data.work_timing || null,
+        data.phone || null,
+        data.email || null,
+        data.pdf_path || null,
+        data.pdf_url || null,
+        existing.id
+      );
+      return existing.id;
+    }
+
     const stmt = db.prepare(`
       INSERT INTO scorecard_leads (
         business_name, contact_person, phone, email, business_type, city,
@@ -1267,8 +1431,13 @@ export const ScorecardLeadModel = {
       params.push(`%${options.business_type}%`);
     }
 
+    // Default: Newest leads on top
     let orderBy = 'ORDER BY created_at DESC, id DESC';
-    if (options.sortBy === 'score_asc') {
+    if (options.sortBy === 'oldest' || options.sortBy === 'date_asc') {
+      orderBy = 'ORDER BY created_at ASC, id ASC';
+    } else if (options.sortBy === 'newest' || options.sortBy === 'date_desc') {
+      orderBy = 'ORDER BY created_at DESC, id DESC';
+    } else if (options.sortBy === 'score_asc') {
       orderBy = 'ORDER BY overall_score ASC';
     } else if (options.sortBy === 'score_desc') {
       orderBy = 'ORDER BY overall_score DESC';
