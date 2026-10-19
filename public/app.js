@@ -705,7 +705,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 window.addEventListener('hashchange', () => {
   const hashTab = window.location.hash.replace('#', '');
-  if (hashTab && ['overview', 'leads', 'maps', 'studio', 'autopilot', 'knowledge', 'accounts', 'settings'].includes(hashTab)) {
+  if (hashTab && ['overview', 'leads', 'maps', 'scorecard', 'studio', 'autopilot', 'knowledge', 'accounts', 'settings'].includes(hashTab)) {
     switchTab(hashTab, false);
   }
 });
@@ -1441,7 +1441,7 @@ function updateLeadCounter() {
 }
 
 function filterLeads() {
-  const platform = document.getElementById('filter-platform')?.value || 'connected';
+  const platform = document.getElementById('filter-platform')?.value || 'all';
   const intent = document.getElementById('filter-intent')?.value || 'all';
   const age = document.getElementById('filter-age')?.value || '7';
   const quality = document.getElementById('filter-quality')?.value || 'all';
@@ -1451,9 +1451,9 @@ function filterLeads() {
   let filtered = allLeads.filter(lead => {
     // 1. Platform connection filter
     let matchPlatform = true;
-    if (platform === 'connected') {
+    if (platform === 'connected' && connectedPlatforms && connectedPlatforms.length > 0) {
       matchPlatform = connectedPlatforms.includes(lead.platform);
-    } else if (platform !== 'all') {
+    } else if (platform !== 'all' && platform !== 'connected') {
       matchPlatform = lead.platform === platform;
     }
 
@@ -1929,14 +1929,14 @@ async function triggerLeadScan() {
   const targetPlatform = (filterPlat === 'connected' || filterPlat === 'all') ? 'all' : filterPlat;
 
   // Validate connected channels before launching scan
-  if (targetPlatform !== 'all' && !connectedPlatforms.includes(targetPlatform)) {
-    alert(`Cannot scan ${targetPlatform.toUpperCase()}: This channel is not connected. Please connect it in Browser Profiles first.`);
+  if (targetPlatform !== 'all' && connectedPlatforms.length > 0 && !connectedPlatforms.includes(targetPlatform)) {
+    showLeadNotificationToast(`⚠️ Connect ${targetPlatform.toUpperCase()}`, `Please open Browser Profiles to connect ${targetPlatform.toUpperCase()} first.`);
     setBtns(false, `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>Scan Connected Channels</span>`);
     return;
   }
 
   if (targetPlatform === 'all' && connectedPlatforms.length === 0) {
-    alert('No social accounts are currently connected! Please connect Threads or Instagram in Browser Profiles before scanning.');
+    showLeadNotificationToast('⚠️ No Accounts Connected', 'Please connect Threads, Instagram, or Facebook in Browser Profiles.');
     setBtns(false, `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>Scan Connected Channels</span>`);
     return;
   }

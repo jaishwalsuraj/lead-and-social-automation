@@ -69,7 +69,7 @@ export class LeadVerifier {
       const page = await context.newPage();
       try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 12000 });
-        await page.waitForTimeout(2000);
+        await new Promise(r => setTimeout(r, 2000));
 
         const pageText = (await page.innerText('body')).toLowerCase();
         await page.close();
