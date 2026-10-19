@@ -143,15 +143,30 @@ export class BrowserManager {
   }
 
   /**
-   * Helper to perform human-like typing delays
+   * Helper to perform human-like typing delays (supports string selector or ElementHandle)
    */
-  async humanType(page, selector, text) {
-    await page.waitForSelector(selector, { state: 'visible', timeout: 10000 });
-    await page.click(selector);
+  async humanType(page, target, text) {
+    if (!target) return;
+    try {
+      if (typeof target === 'string') {
+        const el = await page.waitForSelector(target, { state: 'visible', timeout: 8000 }).catch(() => null);
+        if (el) {
+          await el.scrollIntoViewIfNeeded().catch(() => {});
+          await el.click().catch(() => {});
+        } else {
+          await page.click(target).catch(() => {});
+        }
+      } else {
+        // ElementHandle passed directly
+        await target.scrollIntoViewIfNeeded().catch(() => {});
+        await target.click().catch(() => {});
+      }
+    } catch (_) {}
+
     for (const char of text) {
-      await page.keyboard.type(char, { delay: Math.floor(Math.random() * 60) + 35 });
-      if (Math.random() < 0.08) {
-        await page.waitForTimeout(Math.floor(Math.random() * 300) + 150); // Natural thinking pause
+      await page.keyboard.type(char, { delay: Math.floor(Math.random() * 50) + 30 });
+      if (Math.random() < 0.06) {
+        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 250) + 120)); // Natural thinking pause
       }
     }
   }

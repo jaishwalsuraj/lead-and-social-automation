@@ -2149,8 +2149,12 @@ async function submitModalAction() {
 
       if (errBox && errMsgEl) {
         errMsgEl.innerText = userFriendlyReason;
-        if (openLink && targetLead?.post_url) {
-          openLink.href = targetLead.post_url;
+        if (openLink) {
+          const destUrl = (currentActionMode === 'dm' && targetLead?.author_url) ? targetLead.author_url : (targetLead?.post_url || '#');
+          openLink.href = destUrl;
+          openLink.innerHTML = currentActionMode === 'dm'
+            ? `<span>👤 Open Prospect Profile ↗</span>`
+            : `<span>🌐 Open Target Post in Tab ↗</span>`;
         }
         errBox.style.display = 'block';
       } else {

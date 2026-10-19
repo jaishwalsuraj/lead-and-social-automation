@@ -164,29 +164,137 @@ export class InstagramAdapter {
 
     try {
       LogModel.add(this.platform, 'comment_attempt', `Commenting on Instagram post: ${postUrl}`);
-      await page.goto(postUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
+      const cleanUrl = postUrl.split('?')[0].split('#')[0];
+      await page.goto(cleanUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
       await browserManager.humanDelay(3000, 5000);
 
-      const commentArea = 'textarea[aria-label*="Add a comment"], textarea[placeholder*="Add a comment"]';
-      await page.waitForSelector(commentArea, { timeout: 10000 });
-      await browserManager.humanType(page, commentArea, commentText);
+      // 1. Dismiss cookie banners or popups
+      try {
+        const cookieBtn = await page.$('button:has-text("Allow all cookies"), button:has-text("Decline optional cookies"), button:has-text("Only allow essential cookies"), button:has-text("Accept")');
+        if (cookieBtn && await cookieBtn.isVisible()) {
+          await cookieBtn.click().catch(() => {});
+          await browserManager.humanDelay(600, 1200);
+        }
+        const notNowBtn = await page.$('button:has-text("Not Now"), button:has-text("Cancel")');
+        if (notNowBtn && await notNowBtn.isVisible()) {
+          await notNowBtn.click().catch(() => {});
+          await browserManager.humanDelay(400, 800);
+        }
+      } catch (_) {}
+
+      await page.keyboard.press('Escape').catch(() => {});
+      await browserManager.humanDelay(400, 800);
+
+      // 2. Check if logged out
+      const isLoggedOut = await page.evaluate(() => {
+        return window.location.pathname.includes('/accounts/login') ||
+               !!document.querySelector('form#loginForm, input[name="username"]');
+      });
+      if (isLoggedOut) {
+        throw new Error('Instagram requires an active login session in Chrome. Please open Instagram in Chrome (:9222) and sign in.');
+      }
+
+      // Check if post is missing
+      const isUnavailable = await page.evaluate(() => {
+        const text = document.body ? document.body.innerText : '';
+        return text.includes("Sorry, this page isn't available") || text.includes("Page Not Found");
+      });
+      if (isUnavailable) {
+        throw new Error(`Target Instagram post is unavailable or private: ${postUrl}`);
+      }
+
+      // 3. Scroll down slightly to trigger lazy-loading of interactions
+      await page.evaluate(() => window.scrollBy(0, 300));
       await browserManager.humanDelay(1500, 2500);
 
-      // Click "Post"
-      const postBtn = await page.$('div[role="button"]:has-text("Post")') || await page.$('button:has-text("Post")');
-      if (postBtn) {
-        await postBtn.click();
-        await browserManager.humanDelay(3000, 5000);
-        QuotaModel.increment(this.platform, 'comments_count');
-        LogModel.add(this.platform, 'comment_posted', `Comment posted on Instagram!`, { postUrl, commentText });
-        return { success: true };
+      // 4. Locate comment input trigger or contenteditable box
+      const inputSelectors = [
+        'textarea[aria-label*="Add a comment" i]',
+        'textarea[placeholder*="Add a comment" i]',
+        'div[data-lexical-editor="true"][role="textbox"]',
+        'div[role="textbox"][contenteditable="true"]',
+        'form textarea',
+        'textarea'
+      ];
+
+      let targetInput = null;
+      for (const sel of inputSelectors) {
+        const el = await page.$(sel);
+        if (el && await el.isVisible()) {
+          targetInput = el;
+          break;
+        }
       }
-      throw new Error('Instagram Post button not found');
+
+      // 5. If comment box is collapsed (e.g. reels or modal view), click comment bubble icon
+      if (!targetInput) {
+        console.log('[Instagram] Comment box not yet visible, clicking Comment bubble trigger...');
+        const commentButtonSelectors = [
+          'svg[aria-label*="Comment" i]',
+          'div[role="button"]:has(svg[aria-label*="Comment" i])',
+          'button:has(svg[aria-label*="Comment" i])',
+          'span:has(svg[aria-label*="Comment" i])',
+          'div[role="button"][tabindex="0"]:has(svg[aria-label*="Comment" i])'
+        ];
+
+        for (const btnSel of commentButtonSelectors) {
+          const btn = await page.$(btnSel);
+          if (btn && await btn.isVisible()) {
+            await btn.scrollIntoViewIfNeeded().catch(() => {});
+            await btn.click().catch(() => {});
+            await browserManager.humanDelay(1500, 3000);
+            break;
+          }
+        }
+
+        // Re-check for input after trigger click
+        for (const sel of inputSelectors) {
+          const el = await page.$(sel);
+          if (el && await el.isVisible()) {
+            targetInput = el;
+            break;
+          }
+        }
+      }
+
+      // If still not found, try waiting briefly with state: 'visible'
+      if (!targetInput) {
+        const combinedSelector = inputSelectors.join(', ');
+        try {
+          targetInput = await page.waitForSelector(combinedSelector, { timeout: 8000, state: 'visible' });
+        } catch (_) {}
+      }
+
+      if (!targetInput) {
+        throw new Error('Instagram comment box is collapsed or restricted on this post. You can open the post directly in Chrome to comment.');
+      }
+
+      // 6. Focus & Type into the comment input
+      await targetInput.scrollIntoViewIfNeeded().catch(() => {});
+      await targetInput.click().catch(() => {});
+      await browserManager.humanDelay(600, 1200);
+
+      await browserManager.humanType(page, targetInput, commentText);
+      await browserManager.humanDelay(1500, 2500);
+
+      // 7. Submit via "Post" button or Enter key
+      const postBtn = await page.$('form button[type="submit"], div[role="button"]:has-text("Post"), button:has-text("Post"), div[aria-label="Post"][role="button"]');
+      if (postBtn && await postBtn.isVisible()) {
+        await postBtn.click().catch(() => {});
+        await browserManager.humanDelay(3000, 5000);
+      } else {
+        await page.keyboard.press('Enter');
+        await browserManager.humanDelay(3000, 5000);
+      }
+
+      QuotaModel.increment(this.platform, 'comments_count');
+      LogModel.add(this.platform, 'comment_posted', `Comment posted on Instagram!`, { postUrl, commentText });
+      return { success: true, post_url: postUrl };
     } catch (err) {
       LogModel.add(this.platform, 'comment_error', `Instagram comment failed: ${err.message}`);
-      return { success: false, error: err.message };
+      return { success: false, error: err.message, post_url: postUrl };
     } finally {
-      await page.close();
+      await page.close().catch(() => {});
     }
   }
 
@@ -211,43 +319,112 @@ export class InstagramAdapter {
       await page.goto(`https://www.instagram.com/direct/t/new/`, { timeout: 35000, waitUntil: 'domcontentloaded' });
       await browserManager.humanDelay(3000, 4500);
 
+      // Dismiss cookie banners & popups
+      try {
+        const notNow = await page.$('button:has-text("Not Now"), button:has-text("Cancel")');
+        if (notNow && await notNow.isVisible()) {
+          await notNow.click().catch(() => {});
+          await browserManager.humanDelay(500, 1000);
+        }
+      } catch (_) {}
+
+      // Check login state
+      const isLoggedOut = await page.evaluate(() => {
+        return window.location.pathname.includes('/accounts/login') ||
+               !!document.querySelector('form#loginForm, input[name="username"]');
+      });
+      if (isLoggedOut) {
+        throw new Error('Instagram requires an active login session in Chrome. Please open Instagram in Chrome (:9222) and sign in.');
+      }
+
       // Search recipient
-      const searchInput = 'input[name="queryBox"], input[placeholder*="Search"]';
-      await page.waitForSelector(searchInput, { timeout: 10000 });
+      const searchSelectors = ['input[name="queryBox"]', 'input[placeholder*="Search" i]', 'input[type="text"]'];
+      let searchInput = null;
+      for (const sel of searchSelectors) {
+        const el = await page.$(sel);
+        if (el && await el.isVisible()) {
+          searchInput = el;
+          break;
+        }
+      }
+      if (!searchInput) {
+        try {
+          searchInput = await page.waitForSelector('input[name="queryBox"], input[placeholder*="Search" i]', { timeout: 8000 });
+        } catch (_) {}
+      }
+
+      if (!searchInput) {
+        throw new Error('Could not find Instagram DM search input.');
+      }
+
       await browserManager.humanType(page, searchInput, cleanUser);
       await browserManager.humanDelay(2000, 3000);
 
       // Select first match
-      const userItem = await page.$(`span:has-text("${cleanUser}")`) || await page.$('div[role="button"][tabindex="0"]');
+      const userItem = await page.$(`span:has-text("${cleanUser}")`) ||
+                       await page.$(`div[role="button"]:has-text("${cleanUser}")`) ||
+                       await page.$('div[role="button"][tabindex="0"]');
       if (userItem) {
-        await userItem.click();
+        await userItem.click().catch(() => {});
         await browserManager.humanDelay(1500, 2500);
+      } else {
+        await page.keyboard.press('Enter');
+        await browserManager.humanDelay(1000, 2000);
       }
 
       // Click "Chat" / "Next"
-      const chatBtn = await page.$('div[role="button"]:has-text("Chat")') || await page.$('div[role="button"]:has-text("Next")');
-      if (chatBtn) {
-        await chatBtn.click();
+      const chatBtn = await page.$('div[role="button"]:has-text("Chat"), button:has-text("Chat"), div[role="button"]:has-text("Next"), button:has-text("Next")');
+      if (chatBtn && await chatBtn.isVisible()) {
+        await chatBtn.click().catch(() => {});
         await browserManager.humanDelay(2000, 3500);
       }
 
-      // Enter message
-      const msgBox = 'div[role="textbox"][contenteditable="true"]';
-      await page.waitForSelector(msgBox, { timeout: 10000 });
+      // Enter message in DM box
+      const msgSelectors = [
+        'div[data-lexical-editor="true"][role="textbox"]',
+        'div[role="textbox"][contenteditable="true"]',
+        'div[role="textbox"]',
+        'textarea'
+      ];
+      let msgBox = null;
+      for (const sel of msgSelectors) {
+        const el = await page.$(sel);
+        if (el && await el.isVisible()) {
+          msgBox = el;
+          break;
+        }
+      }
+      if (!msgBox) {
+        try {
+          msgBox = await page.waitForSelector('div[role="textbox"][contenteditable="true"], div[role="textbox"]', { timeout: 8000 });
+        } catch (_) {}
+      }
+
+      if (!msgBox) {
+        throw new Error('Could not find Instagram DM message box.');
+      }
+
       await browserManager.humanType(page, msgBox, messageText);
       await browserManager.humanDelay(1500, 2500);
 
       await page.keyboard.press('Enter');
-      await browserManager.humanDelay(3000, 5000);
+      await browserManager.humanDelay(2500, 4000);
+
+      // Click Send button fallback
+      const sendIcon = await page.$('button:has-text("Send"), div[role="button"]:has-text("Send"), svg[aria-label*="Send" i]');
+      if (sendIcon && await sendIcon.isVisible()) {
+        await sendIcon.click().catch(() => {});
+        await browserManager.humanDelay(1500, 2500);
+      }
 
       QuotaModel.increment(this.platform, 'dms_count');
-      LogModel.add(this.platform, 'dm_sent', `Instagram DM sent to @${cleanUser}!`);
-      return { success: true };
+      LogModel.add(this.platform, 'dm_sent', `Instagram DM sent to @${cleanUser}!`, { recipient: cleanUser, messageText });
+      return { success: true, recipient: cleanUser };
     } catch (err) {
       LogModel.add(this.platform, 'dm_error', `DM to @${username} failed: ${err.message}`);
       return { success: false, error: err.message };
     } finally {
-      await page.close();
+      await page.close().catch(() => {});
     }
   }
 }

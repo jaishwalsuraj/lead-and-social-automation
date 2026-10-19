@@ -166,8 +166,30 @@ export class ThreadsAdapter {
 
     try {
       LogModel.add(this.platform, 'comment_attempt', `Navigating directly to target post: ${targetUrl}`);
-      await page.goto(targetUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
-      await browserManager.humanDelay(2000, 3500);
+      const cleanUrl = targetUrl.split('?')[0].split('#')[0];
+      await page.goto(cleanUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
+      await browserManager.humanDelay(2500, 4000);
+
+      // 1. Dismiss cookie banners or popups
+      try {
+        const cookieBtn = await page.$('button:has-text("Allow all cookies"), button:has-text("Decline optional cookies"), button:has-text("Accept all"), button:has-text("Allow essential and optional cookies")');
+        if (cookieBtn && await cookieBtn.isVisible()) {
+          await cookieBtn.click().catch(() => {});
+          await browserManager.humanDelay(600, 1200);
+        }
+      } catch (_) {}
+
+      await page.keyboard.press('Escape').catch(() => {});
+      await browserManager.humanDelay(400, 800);
+
+      // 2. Check if logged out
+      const isLoggedOut = await page.evaluate(() => {
+        return window.location.pathname.startsWith('/login') ||
+               !!document.querySelector('form[action*="login"], input[name="username"]');
+      });
+      if (isLoggedOut) {
+        throw new Error('Threads requires an active login session in Chrome. Please open Threads in Chrome (:9222) and sign in.');
+      }
 
       // Verify post exists and is not 404
       const isUnavailable = await page.evaluate(() => {
@@ -178,23 +200,74 @@ export class ThreadsAdapter {
         throw new Error(`Target post is unavailable or private: ${postUrl}`);
       }
 
-      // Check if comment input is already visible or click reply trigger
-      let inputElement = await page.$('div[role="textbox"], div[contenteditable="true"], textarea');
-      if (!inputElement) {
-        const replyButton = await page.$('div[aria-label="Reply"]') || 
-                            await page.$('svg[aria-label="Reply"]') || 
-                            await page.$('div[role="button"]:has(svg[aria-label="Reply"])') || 
-                            await page.$('text="Reply"');
-        if (replyButton) {
-          await replyButton.click();
-          await browserManager.humanDelay(1000, 1800);
+      // 3. Scroll down slightly to trigger lazy-loading of interactions
+      await page.evaluate(() => window.scrollBy(0, 300));
+      await browserManager.humanDelay(1500, 2500);
+
+      // 4. Check if comment input is already visible or click reply trigger
+      const inputSelectors = [
+        'div[data-lexical-editor="true"][role="textbox"]',
+        'div[role="textbox"][contenteditable="true"]',
+        'div[role="textbox"]',
+        'textarea'
+      ];
+
+      let targetInput = null;
+      for (const sel of inputSelectors) {
+        const el = await page.$(sel);
+        if (el && await el.isVisible()) {
+          targetInput = el;
+          break;
         }
       }
 
-      // Find the editable reply field
-      const inputSelector = 'div[role="textbox"], div[contenteditable="true"], textarea';
-      await page.waitForSelector(inputSelector, { timeout: 10000 });
-      await browserManager.humanType(page, inputSelector, commentText);
+      if (!targetInput) {
+        console.log('[Threads] Reply box not yet visible, clicking Reply trigger...');
+        const replyButtonSelectors = [
+          'div[aria-label*="Reply" i]',
+          'svg[aria-label*="Reply" i]',
+          'div[role="button"]:has(svg[aria-label*="Reply" i])',
+          'button:has(svg[aria-label*="Reply" i])',
+          'div:has-text("Reply to")',
+          'span:has-text("Reply")'
+        ];
+
+        for (const btnSel of replyButtonSelectors) {
+          const btn = await page.$(btnSel);
+          if (btn && await btn.isVisible()) {
+            await btn.scrollIntoViewIfNeeded().catch(() => {});
+            await btn.click().catch(() => {});
+            await browserManager.humanDelay(1500, 3000);
+            break;
+          }
+        }
+
+        for (const sel of inputSelectors) {
+          const el = await page.$(sel);
+          if (el && await el.isVisible()) {
+            targetInput = el;
+            break;
+          }
+        }
+      }
+
+      if (!targetInput) {
+        const combinedSelector = inputSelectors.join(', ');
+        try {
+          targetInput = await page.waitForSelector(combinedSelector, { timeout: 8000, state: 'visible' });
+        } catch (_) {}
+      }
+
+      if (!targetInput) {
+        throw new Error('Threads reply box is collapsed or restricted on this post. You can open the post directly in Chrome to reply.');
+      }
+
+      // 5. Focus & Enter comment
+      await targetInput.scrollIntoViewIfNeeded().catch(() => {});
+      await targetInput.click().catch(() => {});
+      await browserManager.humanDelay(600, 1200);
+
+      await browserManager.humanType(page, targetInput, commentText);
       await browserManager.humanDelay(1500, 2500);
 
       // 1. Dismiss any open menus or popovers (such as Repost/Quote or Report options)
@@ -397,24 +470,56 @@ export class ThreadsAdapter {
       await page.goto('https://www.threads.com', { timeout: 35000, waitUntil: 'domcontentloaded' });
       await browserManager.humanDelay(2000, 4000);
 
+      // Dismiss cookies
+      try {
+        const cookieBtn = await page.$('button:has-text("Allow all cookies"), button:has-text("Decline optional cookies"), button:has-text("Accept all")');
+        if (cookieBtn && await cookieBtn.isVisible()) {
+          await cookieBtn.click().catch(() => {});
+          await browserManager.humanDelay(600, 1200);
+        }
+      } catch (_) {}
+
       // Click "Start a thread..." or "+" icon
-      const startThreadBtn = await page.$('text="Start a thread..."') || await page.$('svg[aria-label="Create"]') || await page.$('a[href*="/create"]');
+      const startThreadBtn = await page.$('text="Start a thread..."') || await page.$('svg[aria-label="Create"]') || await page.$('a[href*="/create"]') || await page.$('div[role="button"]:has(svg[aria-label="Create"])');
       if (startThreadBtn) {
-        await startThreadBtn.click();
+        await startThreadBtn.click().catch(() => {});
         await browserManager.humanDelay(1500, 2500);
       }
 
-      const textbox = 'div[role="textbox"], div[contenteditable="true"]';
-      await page.waitForSelector(textbox, { timeout: 8000 });
-      await browserManager.humanType(page, textbox, content);
+      const textboxSelectors = [
+        'div[data-lexical-editor="true"][role="textbox"]',
+        'div[role="dialog"] div[role="textbox"]',
+        'div[role="textbox"][contenteditable="true"]',
+        'div[role="textbox"]',
+        'textarea'
+      ];
+      let targetBox = null;
+      for (const sel of textboxSelectors) {
+        const el = await page.$(sel);
+        if (el && await el.isVisible()) {
+          targetBox = el;
+          break;
+        }
+      }
+      if (!targetBox) {
+        try {
+          targetBox = await page.waitForSelector('div[data-lexical-editor="true"][role="textbox"], div[role="textbox"]', { timeout: 8000 });
+        } catch (_) {}
+      }
+
+      if (!targetBox) {
+        throw new Error('Could not locate Threads post composer.');
+      }
+
+      await browserManager.humanType(page, targetBox, content);
       await browserManager.humanDelay(2000, 3500);
 
       const postBtn = await page.$('div[role="dialog"] div[role="button"]:has-text("Post")') || 
                       await page.$('div[role="dialog"] button:has-text("Post")') || 
                       await page.$('button[type="submit"]') ||
                       await page.$('div[role="button"]:has-text("Post")');
-      if (postBtn) {
-        await postBtn.click();
+      if (postBtn && await postBtn.isVisible()) {
+        await postBtn.click().catch(() => {});
         await browserManager.humanDelay(3000, 5000);
       } else {
         await page.keyboard.press('Meta+Enter');

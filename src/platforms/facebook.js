@@ -333,21 +333,55 @@ export class FacebookAdapter {
       await page.goto('https://www.facebook.com/', { timeout: 35000, waitUntil: 'domcontentloaded' });
       await browserManager.humanDelay(2500, 4500);
 
+      // Dismiss cookies
+      try {
+        const cookieBtn = await page.$('button[data-cookiebanner="accept_button"], button:has-text("Allow all cookies"), button:has-text("Decline optional cookies")');
+        if (cookieBtn && await cookieBtn.isVisible()) {
+          await cookieBtn.click().catch(() => {});
+          await browserManager.humanDelay(600, 1200);
+        }
+      } catch (_) {}
+
       // Click "What's on your mind?"
-      const composerBtn = await page.$('span:has-text("What\'s on your mind")') || await page.$('div[role="button"]:has-text("What\'s on your mind")');
+      const composerBtn = await page.$('span:has-text("What\'s on your mind")') ||
+                          await page.$('div[role="button"]:has-text("What\'s on your mind")') ||
+                          await page.$('div[aria-label*="Create a post" i]') ||
+                          await page.$('div[role="button"]:has-text("Create a post")');
       if (composerBtn) {
-        await composerBtn.click();
+        await composerBtn.click().catch(() => {});
         await browserManager.humanDelay(2000, 3000);
       }
 
-      const textbox = 'div[role="dialog"] div[contenteditable="true"][role="textbox"]';
-      await page.waitForSelector(textbox, { timeout: 8000 });
+      const textboxSelectors = [
+        'div[role="dialog"] div[data-lexical-editor="true"][role="textbox"]',
+        'div[role="dialog"] div[contenteditable="true"][role="textbox"]',
+        'div[role="dialog"] div[role="textbox"]',
+        'div[data-lexical-editor="true"][role="textbox"]'
+      ];
+      let textbox = null;
+      for (const sel of textboxSelectors) {
+        const el = await page.$(sel);
+        if (el && await el.isVisible()) {
+          textbox = el;
+          break;
+        }
+      }
+      if (!textbox) {
+        try {
+          textbox = await page.waitForSelector('div[role="dialog"] div[role="textbox"], div[data-lexical-editor="true"][role="textbox"]', { timeout: 8000 });
+        } catch (_) {}
+      }
+
+      if (!textbox) {
+        throw new Error('Facebook composer textbox not found.');
+      }
+
       await browserManager.humanType(page, textbox, content);
       await browserManager.humanDelay(2000, 3500);
 
-      const postBtn = await page.$('div[role="dialog"] div[aria-label="Post"], div[role="dialog"] button:has-text("Post")');
-      if (postBtn) {
-        await postBtn.click();
+      const postBtn = await page.$('div[role="dialog"] div[aria-label="Post"], div[role="dialog"] button:has-text("Post"), div[role="dialog"] div[role="button"]:has-text("Post")');
+      if (postBtn && await postBtn.isVisible()) {
+        await postBtn.click().catch(() => {});
         await browserManager.humanDelay(4000, 6000);
         QuotaModel.increment(this.platform, 'posts_count');
         LogModel.add(this.platform, 'post_published', `Facebook post published!`);
@@ -358,7 +392,7 @@ export class FacebookAdapter {
       LogModel.add(this.platform, 'publish_error', `Publish failed: ${err.message}`);
       return { success: false, error: err.message };
     } finally {
-      await page.close();
+      await page.close().catch(() => {});
     }
   }
 }

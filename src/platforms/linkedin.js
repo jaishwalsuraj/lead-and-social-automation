@@ -162,38 +162,128 @@ export class LinkedInAdapter {
 
     try {
       LogModel.add(this.platform, 'comment_attempt', `Attempting to comment on LinkedIn post: ${postUrl}`);
-      await page.goto(postUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
+      const cleanUrl = postUrl.split('?')[0].split('#')[0];
+      await page.goto(cleanUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
       await browserManager.humanDelay(3000, 5000);
 
-      // Click "Comment" button
-      const commentBtn = await page.$('button[aria-label*="Comment"]') || await page.$('span:has-text("Comment")');
-      if (commentBtn) {
-        await commentBtn.click();
-        await browserManager.humanDelay(1500, 2500);
+      // 1. Dismiss cookie banners or consent popups
+      try {
+        const cookieBtn = await page.$('button[action-type="ACCEPT"], button:has-text("Accept cookies"), button:has-text("Agree & Join"), button:has-text("Reject"), button:has-text("Dismiss")');
+        if (cookieBtn && await cookieBtn.isVisible()) {
+          await cookieBtn.click().catch(() => {});
+          await browserManager.humanDelay(600, 1200);
+        }
+      } catch (_) {}
+
+      await page.keyboard.press('Escape').catch(() => {});
+      await browserManager.humanDelay(400, 800);
+
+      // 2. Check if logged out / authwall
+      const isLoggedOut = await page.evaluate(() => {
+        return window.location.pathname.includes('/authwall') ||
+               window.location.pathname.includes('/login') ||
+               window.location.pathname.includes('/checkpoint') ||
+               !!document.querySelector('form.login__form, input#username, button[data-tracking-control-name*="sign-in"]');
+      });
+      if (isLoggedOut) {
+        throw new Error('LinkedIn requires an active login session in Chrome. Please open LinkedIn in Chrome (:9222) and sign in.');
       }
 
-      // Enter comment in editor
-      const editorSelector = '.ql-editor, div[role="textbox"][contenteditable="true"]';
-      await page.waitForSelector(editorSelector, { timeout: 10000 });
-      await browserManager.humanType(page, editorSelector, commentText);
+      // 3. Scroll down slightly to trigger lazy-loading of interactions
+      await page.evaluate(() => window.scrollBy(0, 350));
+      await browserManager.humanDelay(1500, 2500);
+
+      // 4. Check if comment editor is already open
+      const editorSelectors = [
+        'div.comments-comment-box__editor .ql-editor',
+        '.ql-editor[role="textbox"]',
+        'div[role="textbox"][contenteditable="true"]',
+        'div.comments-comment-texteditor div[role="textbox"]',
+        'div[data-placeholder*="comment" i]'
+      ];
+
+      let targetEditor = null;
+      for (const sel of editorSelectors) {
+        const el = await page.$(sel);
+        if (el && await el.isVisible()) {
+          targetEditor = el;
+          break;
+        }
+      }
+
+      // 5. If comment box is collapsed, click "Comment" button trigger
+      if (!targetEditor) {
+        console.log('[LinkedIn] Comment box not yet visible, clicking Comment button trigger...');
+        const commentButtonSelectors = [
+          'button[aria-label*="Comment" i]',
+          'button.comment-button',
+          'button:has-text("Comment")',
+          'span.artdeco-button__text:has-text("Comment")',
+          'div.feed-shared-social-actions button:has-text("Comment")'
+        ];
+
+        for (const btnSel of commentButtonSelectors) {
+          const btn = await page.$(btnSel);
+          if (btn && await btn.isVisible()) {
+            await btn.scrollIntoViewIfNeeded().catch(() => {});
+            await btn.click().catch(() => {});
+            await browserManager.humanDelay(1500, 3000);
+            break;
+          }
+        }
+
+        // Re-check for editor after trigger click
+        for (const sel of editorSelectors) {
+          const el = await page.$(sel);
+          if (el && await el.isVisible()) {
+            targetEditor = el;
+            break;
+          }
+        }
+      }
+
+      // If still not found, try waiting briefly
+      if (!targetEditor) {
+        const combinedSelector = editorSelectors.join(', ');
+        try {
+          targetEditor = await page.waitForSelector(combinedSelector, { timeout: 8000, state: 'visible' });
+        } catch (_) {}
+      }
+
+      if (!targetEditor) {
+        throw new Error('LinkedIn comment editor is collapsed or restricted on this post. You can open the post directly in Chrome to comment.');
+      }
+
+      // 6. Focus & Enter comment in editor
+      await targetEditor.scrollIntoViewIfNeeded().catch(() => {});
+      await targetEditor.click().catch(() => {});
+      await browserManager.humanDelay(600, 1200);
+
+      await browserManager.humanType(page, targetEditor, commentText);
       await browserManager.humanDelay(2000, 3500);
 
-      // Submit comment
-      const submitBtn = await page.$('button.comments-comment-box__submit-button, button:has-text("Post")');
-      if (submitBtn) {
-        await submitBtn.click();
+      // 7. Submit comment
+      const submitBtn = await page.$('button.comments-comment-box__submit-button, button.comments-comment-box__submit-button--enabled, button.comments-comment-texteditor__submit-button, button[type="submit"]:has-text("Post"), button:has-text("Post"), button:has-text("Comment")');
+      if (submitBtn && await submitBtn.isVisible()) {
+        await submitBtn.click().catch(() => {});
         await browserManager.humanDelay(3000, 5000);
-        QuotaModel.increment(this.platform, 'comments_count');
-        LogModel.add(this.platform, 'comment_posted', `Comment posted on LinkedIn!`, { postUrl, commentText });
-        return { success: true };
+      } else {
+        // LinkedIn shortcut
+        await page.keyboard.press('Meta+Enter');
+        await browserManager.humanDelay(1000, 1500);
+        await page.keyboard.press('Control+Enter');
+        await browserManager.humanDelay(3000, 5000);
       }
-      throw new Error('Comment submit button not found');
+
+      QuotaModel.increment(this.platform, 'comments_count');
+      LogModel.add(this.platform, 'comment_posted', `Comment posted on LinkedIn!`, { postUrl, commentText });
+      return { success: true, post_url: postUrl };
     } catch (err) {
       console.error('[LinkedIn] Commenting error:', err.message);
       LogModel.add(this.platform, 'comment_error', `Failed: ${err.message}`);
-      return { success: false, error: err.message };
+      return { success: false, error: err.message, post_url: postUrl };
     } finally {
-      await page.close();
+      await page.close().catch(() => {});
     }
   }
 
@@ -209,21 +299,52 @@ export class LinkedInAdapter {
       await page.goto('https://www.linkedin.com/feed/', { timeout: 35000, waitUntil: 'domcontentloaded' });
       await browserManager.humanDelay(2500, 4500);
 
+      // Dismiss cookies
+      try {
+        const cookieBtn = await page.$('button[action-type="ACCEPT"], button:has-text("Accept cookies")');
+        if (cookieBtn && await cookieBtn.isVisible()) {
+          await cookieBtn.click().catch(() => {});
+          await browserManager.humanDelay(500, 1000);
+        }
+      } catch (_) {}
+
       // Click "Start a post"
-      const startPostBtn = await page.$('button:has-text("Start a post")') || await page.$('.share-box-feed-entry__trigger');
+      const startPostBtn = await page.$('button:has-text("Start a post"), .share-box-feed-entry__trigger, button.share-box-feed-entry__trigger, button[id*="ember"]:has-text("Start a post")');
       if (startPostBtn) {
-        await startPostBtn.click();
+        await startPostBtn.click().catch(() => {});
         await browserManager.humanDelay(2000, 3000);
       }
 
-      const editor = '.ql-editor, div[role="textbox"][contenteditable="true"]';
-      await page.waitForSelector(editor, { timeout: 8000 });
+      const editorSelectors = [
+        '.ql-editor[role="textbox"]',
+        'div[role="dialog"] div[role="textbox"][contenteditable="true"]',
+        'div.share-creation-state__text-editor div[role="textbox"]',
+        'div[role="textbox"][contenteditable="true"]'
+      ];
+      let editor = null;
+      for (const sel of editorSelectors) {
+        const el = await page.$(sel);
+        if (el && await el.isVisible()) {
+          editor = el;
+          break;
+        }
+      }
+      if (!editor) {
+        try {
+          editor = await page.waitForSelector('.ql-editor, div[role="textbox"][contenteditable="true"]', { timeout: 8000 });
+        } catch (_) {}
+      }
+
+      if (!editor) {
+        throw new Error('LinkedIn post editor not found.');
+      }
+
       await browserManager.humanType(page, editor, content);
       await browserManager.humanDelay(2000, 3500);
 
-      const postBtn = await page.$('button.share-actions__primary-action, button:has-text("Post")');
-      if (postBtn) {
-        await postBtn.click();
+      const postBtn = await page.$('button.share-actions__primary-action, div[role="dialog"] button:has-text("Post"), button:has-text("Post")');
+      if (postBtn && await postBtn.isVisible()) {
+        await postBtn.click().catch(() => {});
         await browserManager.humanDelay(4000, 6000);
         QuotaModel.increment(this.platform, 'posts_count');
         LogModel.add(this.platform, 'post_published', `LinkedIn post successfully published!`);
@@ -234,7 +355,7 @@ export class LinkedInAdapter {
       LogModel.add(this.platform, 'publish_error', `Publish failed: ${err.message}`);
       return { success: false, error: err.message };
     } finally {
-      await page.close();
+      await page.close().catch(() => {});
     }
   }
 }
