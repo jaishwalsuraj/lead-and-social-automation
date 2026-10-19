@@ -395,6 +395,14 @@
             <button type="button" class="btn btn-sm btn-outline" id="btn-sort-direction" onclick="toggleSortDirection()" title="Quick toggle date order: Newest First (Descending) / Oldest First (Ascending)" style="font-weight: 600; padding: 6px 12px;">
               ⬇️ Newest First
             </button>
+            <select id="filter-outreach" onchange="onOutreachDropdownChange()" title="Filter by Outreach Status (Reachout, DM Done, Comment Done)">
+              <option value="all" selected>📬 All Outreach Status</option>
+              <option value="new">✨ New Leads (Pending Outreach)</option>
+              <option value="reached_out">💬 Any Reachout Done (Comment or DM)</option>
+              <option value="comment_done">💬 Comment Done / Reached Out</option>
+              <option value="dm_done">✉️ DM Done / Direct Message Sent</option>
+              <option value="converted">🏆 Converted Clients</option>
+            </select>
             <select id="filter-intent" onchange="filterLeads()" title="Filter by buying intent">
               <option value="all">All Intent Scores</option>
               <option value="high">High Intent (70%+)</option>
@@ -413,8 +421,8 @@
               <option value="incorrect">👎 Disqualified / Not a Lead</option>
             </select>
             <select id="filter-verified" onchange="filterLeads()" title="Filter by URL / profile verification status">
-              <option value="all">🛡️ All Verification Statuses</option>
-              <option value="verified" selected>✅ Verified Live Leads Only</option>
+              <option value="all" selected>🛡️ All Verification Statuses</option>
+              <option value="verified">✅ Verified Live Leads Only</option>
               <option value="unverified">⏳ Unverified / Pending Check</option>
             </select>
           </div>

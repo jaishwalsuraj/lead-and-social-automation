@@ -1378,6 +1378,46 @@ function setPipelineStage(stage) {
       tab.classList.remove('active');
     }
   });
+
+  // Sync outreach dropdown
+  const outreachSelect = document.getElementById('filter-outreach');
+  if (outreachSelect) {
+    if (stage === 'all') outreachSelect.value = 'all';
+    else if (stage === 'discovered') outreachSelect.value = 'new';
+    else if (stage === 'engaged') outreachSelect.value = 'comment_done';
+    else if (stage === 'dm_sent') outreachSelect.value = 'dm_done';
+    else if (stage === 'converted') outreachSelect.value = 'converted';
+  }
+
+  filterLeads();
+}
+
+function onOutreachDropdownChange() {
+  const val = document.getElementById('filter-outreach')?.value || 'all';
+  if (val === 'all') {
+    currentPipelineStage = 'all';
+  } else if (val === 'new') {
+    currentPipelineStage = 'discovered';
+  } else if (val === 'comment_done') {
+    currentPipelineStage = 'engaged';
+  } else if (val === 'dm_done') {
+    currentPipelineStage = 'dm_sent';
+  } else if (val === 'reached_out') {
+    currentPipelineStage = 'reached_out';
+  } else if (val === 'converted') {
+    currentPipelineStage = 'converted';
+  }
+
+  // Sync tab active states
+  document.querySelectorAll('#crm-pipeline-bar .stage-tab').forEach(tab => {
+    const tabStage = tab.getAttribute('data-stage');
+    if (tabStage === currentPipelineStage || (val === 'all' && tabStage === 'all')) {
+      tab.classList.add('active');
+    } else {
+      tab.classList.remove('active');
+    }
+  });
+
   filterLeads();
 }
 
@@ -1417,7 +1457,7 @@ function setLeadView(mode) {
 
 async function loadLeads() {
   try {
-    const ageFilter = document.getElementById('filter-age')?.value || '7';
+    const ageFilter = document.getElementById('filter-age')?.value || 'all';
     const sortBy = document.getElementById('filter-sort')?.value || 'newest';
     const res = await fetch(`/api/leads?limit=300&maxDays=${ageFilter}&sortBy=${sortBy}&connectedOnly=false`);
     allLeads = await res.json();
@@ -1429,12 +1469,12 @@ async function loadLeads() {
 }
 
 function updatePipelineCounters() {
-  // Disqualified leads are excluded from pipeline counts
-  const validLeads = allLeads.filter(l => l.feedback !== 'incorrect' && l.status !== 'disqualified');
+  // Disqualified and dead leads are excluded from pipeline counts
+  const validLeads = allLeads.filter(l => l.feedback !== 'incorrect' && l.status !== 'disqualified' && l.verification_status !== 'dead');
 
   const total = validLeads.length;
   const newLeads = validLeads.filter(l => l.status === 'discovered' && !l.reached_out_at).length;
-  const engaged = validLeads.filter(l => l.status === 'engaged').length;
+  const engaged = validLeads.filter(l => l.status === 'engaged' || Boolean(l.last_comment_url)).length;
   const dmSent = validLeads.filter(l => l.status === 'dm_sent').length;
   const converted = validLeads.filter(l => l.status === 'converted').length;
   const quality = validLeads.filter(l => l.feedback === 'correct').length;
@@ -1455,16 +1495,11 @@ function updatePipelineCounters() {
     notifEl.style.display = newLeads > 0 ? 'inline-flex' : 'none';
   }
 
-  // Sidebar counter
+  // Sidebar counter - always unified with CRM total
   const sidebarEl = document.getElementById('sidebar-lead-count');
   if (sidebarEl) {
-    if (newLeads > 0) {
-      sidebarEl.innerHTML = `<span class="badge-pulse-dot"></span> ${newLeads} NEW`;
-      sidebarEl.classList.add('has-new');
-    } else {
-      sidebarEl.innerText = total;
-      sidebarEl.classList.remove('has-new');
-    }
+    sidebarEl.innerText = total;
+    sidebarEl.classList.remove('has-new');
   }
 }
 
@@ -1475,8 +1510,9 @@ function updateLeadCounter() {
 function filterLeads() {
   const platform = document.getElementById('filter-platform')?.value || 'all';
   const intent = document.getElementById('filter-intent')?.value || 'all';
-  const age = document.getElementById('filter-age')?.value || '7';
+  const age = document.getElementById('filter-age')?.value || 'all';
   const quality = document.getElementById('filter-quality')?.value || 'all';
+  const outreachVal = document.getElementById('filter-outreach')?.value || 'all';
 
   const maxDays = age === 'all' ? 99999 : parseFloat(age);
 
@@ -1498,18 +1534,24 @@ function filterLeads() {
     const leadAge = lead.post_age_days !== undefined && lead.post_age_days !== null ? lead.post_age_days : 0;
     const matchAge = leadAge <= maxDays;
 
-    // 4. Pipeline stage tab filter
+    // 4. Outreach & Pipeline Stage filter (Reachout, DM done, Comment done, New)
     let matchStage = true;
-    if (currentPipelineStage === 'discovered') {
-      matchStage = lead.status === 'discovered' && !lead.reached_out_at;
+    if (outreachVal === 'new' || currentPipelineStage === 'discovered') {
+      matchStage = (lead.status === 'discovered' && !lead.reached_out_at);
+    } else if (outreachVal === 'comment_done') {
+      matchStage = (lead.status === 'engaged' || Boolean(lead.last_comment_url));
+    } else if (outreachVal === 'dm_done') {
+      matchStage = (lead.status === 'dm_sent');
+    } else if (outreachVal === 'reached_out') {
+      matchStage = Boolean(lead.reached_out_at) || lead.status === 'engaged' || lead.status === 'dm_sent' || lead.status === 'converted';
+    } else if (outreachVal === 'converted' || currentPipelineStage === 'converted') {
+      matchStage = (lead.status === 'converted');
     } else if (currentPipelineStage === 'engaged') {
-      matchStage = lead.status === 'engaged';
+      matchStage = (lead.status === 'engaged' || Boolean(lead.last_comment_url));
     } else if (currentPipelineStage === 'dm_sent') {
-      matchStage = lead.status === 'dm_sent';
-    } else if (currentPipelineStage === 'converted') {
-      matchStage = lead.status === 'converted';
+      matchStage = (lead.status === 'dm_sent');
     } else if (currentPipelineStage === 'quality') {
-      matchStage = lead.feedback === 'correct';
+      matchStage = (lead.feedback === 'correct');
     }
 
     // 5. Quality feedback filter
@@ -1518,7 +1560,7 @@ function filterLeads() {
     if (quality === 'incorrect') matchQuality = lead.feedback === 'incorrect';
     if (quality === 'unreviewed') matchQuality = !lead.feedback;
 
-    // 6. Live verification filter
+    // 6. Live verification filter (Defaults to 'all' so new unverified leads are fully visible)
     const verifiedFilter = document.getElementById('filter-verified')?.value || 'all';
     let matchVerified = true;
     if (verifiedFilter === 'verified') {

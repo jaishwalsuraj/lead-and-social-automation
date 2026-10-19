@@ -981,19 +981,22 @@ export const LeadModel = {
   },
 
   getStats: (maxDays = 7) => {
-    const filter = maxDays < 90000 ? 'WHERE (post_age_days <= ? OR post_age_days IS NULL)' : '';
+    const activeCondition = "status != 'disqualified' AND (verification_status IS NULL OR verification_status != 'dead') AND (feedback IS NULL OR feedback != 'incorrect')";
+    const filter = maxDays < 90000 
+      ? `WHERE ${activeCondition} AND (post_age_days <= ? OR post_age_days IS NULL)` 
+      : `WHERE ${activeCondition}`;
     const params = maxDays < 90000 ? [maxDays] : [];
 
     const total = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter}`).get(...params).count;
-    const discovered = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter ? filter + ' AND' : 'WHERE'} status = 'discovered'`).get(...params).count;
-    const engaged = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter ? filter + ' AND' : 'WHERE'} status = 'engaged'`).get(...params).count;
-    const dm_sent = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter ? filter + ' AND' : 'WHERE'} status = 'dm_sent'`).get(...params).count;
-    const converted = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter ? filter + ' AND' : 'WHERE'} status = 'converted'`).get(...params).count;
-    const high_intent = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter ? filter + ' AND' : 'WHERE'} intent_score >= 70`).get(...params).count;
-    const correct_feedback = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter ? filter + ' AND' : 'WHERE'} feedback = 'correct'`).get(...params).count;
-    const incorrect_feedback = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter ? filter + ' AND' : 'WHERE'} feedback = 'incorrect'`).get(...params).count;
-    const verified = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter ? filter + ' AND' : 'WHERE'} status != 'disqualified' AND verification_status = 'verified'`).get(...params).count;
-    const dead = db.prepare(`SELECT COUNT(*) as count FROM leads WHERE verification_status = 'dead'`).get().count;
+    const discovered = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter} AND status = 'discovered'`).get(...params).count;
+    const engaged = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter} AND status = 'engaged'`).get(...params).count;
+    const dm_sent = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter} AND status = 'dm_sent'`).get(...params).count;
+    const converted = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter} AND status = 'converted'`).get(...params).count;
+    const high_intent = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter} AND intent_score >= 70`).get(...params).count;
+    const correct_feedback = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter} AND feedback = 'correct'`).get(...params).count;
+    const incorrect_feedback = db.prepare(`SELECT COUNT(*) as count FROM leads WHERE feedback = 'incorrect' OR status = 'disqualified'`).get().count;
+    const verified = db.prepare(`SELECT COUNT(*) as count FROM leads ${filter} AND verification_status = 'verified'`).get(...params).count;
+    const dead = db.prepare(`SELECT COUNT(*) as count FROM leads WHERE verification_status = 'dead' OR status = 'disqualified'`).get().count;
 
     return { total, discovered, engaged, dm_sent, converted, high_intent, correct_feedback, incorrect_feedback, verified, dead };
   },
