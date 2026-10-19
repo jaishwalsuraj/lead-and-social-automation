@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import fs from 'fs';
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
@@ -18,6 +19,8 @@ import { ScorecardEngine, scorecardQuestions } from '../agent/scorecardEngine.js
 import { ScorecardPdfGenerator } from '../agent/pdfGenerator.js';
 import { tunnelManager } from './tunnelManager.js';
 
+import { loginRateLimiter, forgotPwRateLimiter, resetPwRateLimiter, publicApiRateLimiter, applySecurityHeaders, isPathSafe } from './security.js';
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,19 +30,67 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
+app.use(applySecurityHeaders);
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../../public')));
 
-// Attach WebSocket clients to orchestrator for real-time logs and events
+// Attach WebSocket clients to orchestrator for real-time logs and events with authentication guard
 tunnelManager.setOrchestrator(orchestrator);
-wss.on('connection', (ws) => {
-  orchestrator.registerWsClient(ws);
-  ws.send(JSON.stringify({ 
-    type: 'connected', 
-    message: 'Connected to Anti-Gravity Social Growth Hub',
-    tunnel: tunnelManager.getStatus()
-  }));
+wss.on('connection', (ws, req) => {
+  let authenticatedUser = null;
+  try {
+    const url = new URL(req.url, 'http://localhost');
+    const queryToken = url.searchParams.get('token');
+    if (queryToken) {
+      authenticatedUser = verifyAuthToken(queryToken);
+    }
+  } catch (_) {}
+
+  if (authenticatedUser) {
+    orchestrator.registerWsClient(ws);
+    ws.send(JSON.stringify({ 
+      type: 'authenticated',
+      auth_success: true,
+      message: 'Connected to Anti-Gravity Social Growth Hub (Authenticated)',
+      tunnel: tunnelManager.getStatus(),
+      user: authenticatedUser.username
+    }));
+  } else {
+    // Grace period for client to send { type: 'auth', token: '...' } message
+    const authTimeout = setTimeout(() => {
+      if (!authenticatedUser) {
+        try { 
+          ws.send(JSON.stringify({ type: 'auth_required', message: 'Authentication required for real-time stream' }));
+          ws.close(4001, 'Authentication required'); 
+        } catch (_) {}
+      }
+    }, 12000);
+
+    ws.on('message', (msgRaw) => {
+      try {
+        const msg = JSON.parse(msgRaw.toString());
+        if (msg.type === 'auth' && msg.token) {
+          const user = verifyAuthToken(msg.token);
+          if (user) {
+            authenticatedUser = user;
+            clearTimeout(authTimeout);
+            orchestrator.registerWsClient(ws);
+            ws.send(JSON.stringify({
+              type: 'authenticated',
+              auth_success: true,
+              message: 'Authenticated real-time stream active',
+              tunnel: tunnelManager.getStatus(),
+              user: user.username
+            }));
+          } else {
+            ws.send(JSON.stringify({ type: 'auth_error', error: 'Invalid authentication token' }));
+            ws.close(4003, 'Invalid token');
+          }
+        }
+      } catch (_) {}
+    });
+  }
 });
 
 // ==================== AUTHENTICATION & SECURITY MIDDLEWARE ====================
@@ -91,16 +142,28 @@ function requireAdmin(req, res, next) {
 
 // ==================== AUTH API ROUTES ====================
 
-// User login (Admin & Assigned)
+// User login (Admin & Assigned) with brute-force protection
 app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Username and password are required' });
+  const identifier = (req.body.username || req.body.email || '').trim();
+  const password = req.body.password;
+  if (!identifier || !password) {
+    return res.status(400).json({ error: 'Username or email and password are required' });
   }
-  const user = UserModel.findByUsername(username);
+
+  // Rate limiting: max 5 failed attempts per 15 min per IP/account
+  const rate = loginRateLimiter.check(req, identifier);
+  if (!rate.allowed) {
+    LogModel.add('security', 'login_lockout', `Brute force protection triggered for ${identifier}. Locked for ${rate.waitSeconds}s.`);
+    return res.status(429).json({ error: `Too many failed login attempts. Please wait ${rate.waitSeconds} seconds before trying again.`, retryAfter: rate.waitSeconds });
+  }
+
+  const user = UserModel.findByUsername(identifier) || UserModel.findByEmail(identifier);
   if (!user || !UserModel.verifyPassword(user, password)) {
     return res.status(401).json({ error: 'Invalid username or password' });
   }
+
+  // Reset rate limiter on successful login
+  loginRateLimiter.reset(req, identifier);
   UserModel.updateLastLogin(user.id);
   const token = createAuthToken(user);
   res.json({
@@ -166,12 +229,18 @@ app.delete('/api/auth/users/:id', requireAuth, requireAdmin, (req, res) => {
   }
 });
 
-// Request password reset verification code
+// Request password reset verification code (rate-limited)
 app.post('/api/auth/forgot-password', (req, res) => {
   const { email, identifier } = req.body;
   const target = (email || identifier || '').trim();
   if (!target) {
     return res.status(400).json({ error: 'Please enter your registered email or username' });
+  }
+
+  // Rate limit: max 3 requests per 15 min per IP/target
+  const rate = forgotPwRateLimiter.check(req, target);
+  if (!rate.allowed) {
+    return res.status(429).json({ error: `Too many password reset requests. Please wait ${rate.waitSeconds} seconds before trying again.` });
   }
 
   const user = UserModel.findByEmail(target) || UserModel.findByUsername(target);
@@ -189,7 +258,6 @@ app.post('/api/auth/forgot-password', (req, res) => {
   console.log(`\n======================================================`);
   console.log(`🔐 [SECURITY] PASSWORD RESET REQUESTED FOR: ${user.email}`);
   console.log(`👉 6-DIGIT VERIFICATION CODE: ${resetCode}`);
-  console.log(`👉 MASTER RECOVERY KEY:        ${user.recovery_key}`);
   console.log(`⏰ CODE EXPIRES IN:           15 MINUTES`);
   console.log(`======================================================\n`);
 
@@ -201,7 +269,7 @@ app.post('/api/auth/forgot-password', (req, res) => {
   });
 });
 
-// Complete password reset using 6-digit OTP code or Master Recovery Key
+// Complete password reset using 6-digit OTP code or Master Recovery Key (rate-limited + lockout)
 app.post('/api/auth/reset-password', (req, res) => {
   const { identifier, email, resetCode, newPassword } = req.body;
   const target = (identifier || email || '').trim();
@@ -217,6 +285,14 @@ app.post('/api/auth/reset-password', (req, res) => {
     return res.status(400).json({ error: 'New password must be at least 6 characters' });
   }
 
+  // Rate limit: max 5 reset attempts. If exceeded, invalidate active OTP for security!
+  const rate = resetPwRateLimiter.check(req, target);
+  if (!rate.allowed) {
+    const u = UserModel.findByEmail(target) || UserModel.findByUsername(target);
+    if (u) UserModel.clearResetToken(u.id);
+    return res.status(429).json({ error: `Too many incorrect reset attempts. The current OTP has been invalidated for security. Please request a new code.` });
+  }
+
   const user = UserModel.findByEmail(target) || UserModel.findByUsername(target);
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
@@ -230,6 +306,8 @@ app.post('/api/auth/reset-password', (req, res) => {
     return res.status(400).json({ error: 'Invalid or expired verification code / recovery key' });
   }
 
+  // Reset limiter on success
+  resetPwRateLimiter.reset(req, target);
   UserModel.updatePassword(user.id, newPassword);
   UserModel.updateLastLogin(user.id);
   const token = createAuthToken(user);
@@ -804,7 +882,7 @@ app.get('/api/scorecard/config', (req, res) => {
 });
 
 // Submit Scorecard Assessment (STRICTLY OPEN / NO LOGIN FOR PROSPECTS)
-app.post('/api/scorecard/submit', async (req, res) => {
+app.post('/api/scorecard/submit', publicApiRateLimiter.middleware(), async (req, res) => {
   try {
     const businessName = req.body.businessName || req.body.business_name;
     const contactPerson = req.body.contactPerson || req.body.contact_person;
@@ -934,8 +1012,16 @@ app.get('/api/scorecard/leads/:id/pdf', (req, res) => {
     if (!lead || !lead.pdf_path) {
       return res.status(404).json({ error: 'PDF not found for this lead.' });
     }
-    const downloadName = lead.pdf_path ? path.basename(lead.pdf_path) : `rx-prescription-${(lead.contact_person || 'doctor').toLowerCase().replace(/[^a-z0-9]/g, '-')}.pdf`;
-    res.download(lead.pdf_path, downloadName);
+    const safePdfBase = path.resolve('public', 'prescriptions');
+    const resolvedPath = path.resolve(lead.pdf_path);
+    if (!isPathSafe(safePdfBase, resolvedPath)) {
+      return res.status(403).json({ error: 'Access denied: Invalid file location.' });
+    }
+    if (!fs.existsSync(resolvedPath)) {
+      return res.status(404).json({ error: 'PDF file not found on disk.' });
+    }
+    const downloadName = path.basename(resolvedPath);
+    res.download(resolvedPath, downloadName);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1100,7 +1186,7 @@ app.get('/api/knowledge', requireAuth, requireAdmin, (req, res) => {
 app.get('/api/knowledge/:filename', requireAuth, requireAdmin, (req, res) => {
   try {
     const filename = req.params.filename;
-    if (!filename || !filename.endsWith('.md')) {
+    if (!filename || !filename.endsWith('.md') || path.basename(filename) !== filename) {
       return res.status(400).json({ error: 'Only markdown knowledge files (.md) are accessible' });
     }
     const content = metaEngineBridge.getKnowledgeFile(filename);
@@ -1114,7 +1200,7 @@ app.get('/api/knowledge/:filename', requireAuth, requireAdmin, (req, res) => {
 app.post('/api/knowledge/:filename', requireAuth, requireAdmin, (req, res) => {
   try {
     const filename = req.params.filename;
-    if (!filename || !filename.endsWith('.md')) {
+    if (!filename || !filename.endsWith('.md') || path.basename(filename) !== filename) {
       return res.status(400).json({ error: 'Only markdown knowledge files (.md) can be modified' });
     }
     const { content } = req.body;

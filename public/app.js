@@ -792,7 +792,8 @@ function initWebSocket() {
     wsProtocol = 'wss:';
   }
 
-  const wsUrl = `${wsProtocol}//${wsHost}`;
+  const tokenQuery = authToken ? `?token=${encodeURIComponent(authToken)}` : '';
+  const wsUrl = `${wsProtocol}//${wsHost}${tokenQuery}`;
 
   try {
     ws = new WebSocket(wsUrl);
@@ -810,6 +811,11 @@ function initWebSocket() {
     const indicator = document.getElementById('ws-indicator');
     if (indicator) indicator.innerText = 'Connected & Listening';
     appendTerminalLog('Connected to Anti-Gravity Real-Time Event Hub', 'text-success');
+    if (authToken) {
+      try {
+        ws.send(JSON.stringify({ type: 'auth', token: authToken }));
+      } catch (e) {}
+    }
   };
 
   ws.onerror = (err) => {
