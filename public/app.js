@@ -1,3 +1,380 @@
+// ==================== AUTHENTICATION & GLOBAL FETCH INTERCEPTOR ====================
+let currentUser = null;
+let authToken = localStorage.getItem('tg_auth_token') || null;
+
+// Intercept window.fetch to automatically attach Bearer token and handle 401s
+const _rawFetch = window.fetch;
+window.fetch = async function (url, options = {}) {
+  options = options || {};
+  options.headers = options.headers || {};
+
+  if (options.headers instanceof Headers) {
+    if (authToken && !options.headers.has('Authorization')) {
+      options.headers.set('Authorization', `Bearer ${authToken}`);
+    }
+  } else if (typeof options.headers === 'object') {
+    if (authToken && !options.headers['Authorization']) {
+      options.headers['Authorization'] = `Bearer ${authToken}`;
+    }
+  }
+
+  try {
+    const res = await _rawFetch(url, options);
+    // If 401 Unauthorized, intercept and prompt login overlay (excluding login endpoint itself or public scorecard config/submit)
+    if (res.status === 401 && typeof url === 'string') {
+      const isPublic = url.includes('/api/auth/login') || url.includes('/api/scorecard/config') || url.includes('/api/scorecard/submit') || url.includes('/prescriptions/');
+      if (!isPublic) {
+        console.warn('[Auth Interceptor] 401 Unauthorized on:', url);
+        showLoginOverlay('Session expired or login required. Please sign in.');
+      }
+    }
+    return res;
+  } catch (err) {
+    throw err;
+  }
+};
+
+// Universal Clipboard copy with fallback for all browser contexts
+async function copyToClipboard(text) {
+  if (!text) return false;
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
+      console.warn('navigator.clipboard.writeText failed, using textarea fallback:', err);
+    }
+  }
+
+  try {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-9999px';
+    textArea.style.top = '-9999px';
+    textArea.setAttribute('readonly', '');
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    const successful = document.execCommand('copy');
+    document.body.removeChild(textArea);
+    return successful;
+  } catch (err) {
+    console.error('Fallback clipboard copy failed:', err);
+    return false;
+  }
+}
+
+// Authentication Controller Functions
+function showLoginOverlay(msg) {
+  const overlay = document.getElementById('login-overlay');
+  const badge = document.getElementById('user-profile-badge');
+  const btnLogin = document.getElementById('btn-header-login');
+  const errorAlert = document.getElementById('login-error-alert');
+  const errorText = document.getElementById('login-error-text');
+
+  if (overlay) overlay.style.display = 'flex';
+  if (badge) badge.style.display = 'none';
+  if (btnLogin) btnLogin.style.display = 'inline-flex';
+
+  if (msg && errorText && errorAlert) {
+    errorText.innerText = msg;
+    errorAlert.style.display = 'flex';
+  } else if (errorAlert) {
+    errorAlert.style.display = 'none';
+  }
+
+  const pubLink = document.getElementById('login-pub-scorecard-link');
+  if (pubLink) {
+    const base = (activePublicUrl || window.location.origin).replace(/\/+$/, '');
+    pubLink.href = `${base}/scorecard`;
+    pubLink.innerText = `${base}/scorecard ↗`;
+  }
+}
+
+function hideLoginOverlay() {
+  const overlay = document.getElementById('login-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function quickFillLogin(role) {
+  const usernameInput = document.getElementById('login-username');
+  const passwordInput = document.getElementById('login-password');
+  const errorAlert = document.getElementById('login-error-alert');
+  if (errorAlert) errorAlert.style.display = 'none';
+
+  if (role === 'admin') {
+    if (usernameInput) usernameInput.value = 'admin';
+    if (passwordInput) passwordInput.value = 'admin123';
+  } else if (role === 'assigned') {
+    if (usernameInput) usernameInput.value = 'assigned';
+    if (passwordInput) passwordInput.value = 'assigned123';
+  }
+  if (passwordInput) passwordInput.focus();
+}
+
+function toggleLoginPasswordVisibility() {
+  const pwInput = document.getElementById('login-password');
+  if (!pwInput) return;
+  pwInput.type = pwInput.type === 'password' ? 'text' : 'password';
+}
+
+async function doLogin(e) {
+  if (e) e.preventDefault();
+  const usernameInput = document.getElementById('login-username');
+  const passwordInput = document.getElementById('login-password');
+  const errorAlert = document.getElementById('login-error-alert');
+  const errorText = document.getElementById('login-error-text');
+  const submitBtn = document.getElementById('btn-submit-login');
+
+  const username = usernameInput ? usernameInput.value.trim() : '';
+  const password = passwordInput ? passwordInput.value : '';
+
+  if (!username || !password) {
+    if (errorText) errorText.innerText = 'Please enter both username and password.';
+    if (errorAlert) errorAlert.style.display = 'flex';
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span>Verifying Credentials...</span>';
+  }
+  if (errorAlert) errorAlert.style.display = 'none';
+
+  try {
+    const res = await _rawFetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success && data.token) {
+      authToken = data.token;
+      currentUser = data.user;
+      localStorage.setItem('tg_auth_token', authToken);
+      hideLoginOverlay();
+      applyRolePermissions();
+      showLeadNotificationToast(`👋 Welcome, ${currentUser.name || currentUser.username}!`, `Signed in with ${currentUser.role.toUpperCase()} access.`);
+
+      // Initialize all live feeds
+      initWebSocket();
+      checkPlatformStatuses(false);
+      loadSearchKeywords();
+      loadStats();
+      loadLeads();
+      if (currentUser.role === 'admin') {
+        loadSettings();
+      }
+      loadTunnelStatus();
+      checkCdpStatus();
+      loadMapsStats();
+      loadScorecardStats();
+
+      const hashTab = window.location.hash.replace('#', '');
+      if (hashTab) {
+        switchTab(hashTab, false);
+      }
+    } else {
+      if (errorText) errorText.innerText = data.error || 'Invalid username or password.';
+      if (errorAlert) errorAlert.style.display = 'flex';
+      if (passwordInput) passwordInput.value = '';
+    }
+  } catch (err) {
+    console.error('Login error:', err);
+    if (errorText) errorText.innerText = 'Unable to connect to server. Please try again.';
+    if (errorAlert) errorAlert.style.display = 'flex';
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<span>Sign In to Growth Hub 🚀</span>';
+    }
+  }
+}
+
+async function logoutUser() {
+  try {
+    if (authToken) {
+      await _rawFetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+    }
+  } catch (e) {
+    console.warn('Logout notification error:', e);
+  }
+  authToken = null;
+  currentUser = null;
+  localStorage.removeItem('tg_auth_token');
+  showLoginOverlay('You have successfully signed out.');
+}
+
+async function checkAuthSession() {
+  authToken = localStorage.getItem('tg_auth_token') || null;
+  if (!authToken) {
+    return false;
+  }
+  try {
+    const res = await _rawFetch('/api/auth/me', {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.user) {
+        currentUser = data.user;
+        applyRolePermissions();
+        hideLoginOverlay();
+        return true;
+      }
+    }
+  } catch (e) {
+    console.warn('Auth check error:', e);
+  }
+  authToken = null;
+  currentUser = null;
+  localStorage.removeItem('tg_auth_token');
+  return false;
+}
+
+function applyRolePermissions() {
+  const badge = document.getElementById('user-profile-badge');
+  const avatar = document.getElementById('user-avatar-icon');
+  const nameEl = document.getElementById('user-display-name');
+  const roleEl = document.getElementById('user-display-role');
+  const btnLogin = document.getElementById('btn-header-login');
+
+  if (!currentUser) {
+    if (badge) badge.style.display = 'none';
+    if (btnLogin) btnLogin.style.display = 'inline-flex';
+    return;
+  }
+
+  if (btnLogin) btnLogin.style.display = 'none';
+  if (badge) badge.style.display = 'inline-flex';
+  if (nameEl) nameEl.innerText = currentUser.name || currentUser.username;
+
+  if (avatar) avatar.innerText = currentUser.role === 'admin' ? '👑' : '👤';
+  if (roleEl) {
+    roleEl.innerText = currentUser.role.toUpperCase();
+    roleEl.className = `user-role-chip role-${currentUser.role}`;
+  }
+
+  // Admin tabs styling / restriction
+  const adminTabs = ['autopilot', 'knowledge', 'accounts', 'settings'];
+  adminTabs.forEach(tabKey => {
+    const navBtn = document.getElementById(`nav-${tabKey}`);
+    if (navBtn) {
+      if (currentUser.role === 'assigned') {
+        navBtn.style.opacity = '0.55';
+        navBtn.title = '🔒 Restricted: Admin privilege required';
+      } else {
+        navBtn.style.opacity = '1';
+        navBtn.title = '';
+      }
+    }
+  });
+}
+
+// User & Team Management (Admin Only)
+async function loadTeamUsers() {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  const tbody = document.getElementById('team-users-tbody');
+  if (!tbody) return;
+
+  try {
+    const res = await fetch('/api/auth/users');
+    if (!res.ok) return;
+    const data = await res.json();
+    const users = data.users || [];
+
+    tbody.innerHTML = users.map(u => {
+      const isSelf = u.id === currentUser.id;
+      const roleBadge = u.role === 'admin' 
+        ? '<span class="user-role-chip role-admin">👑 ADMIN</span>'
+        : '<span class="user-role-chip role-assigned">👤 ASSIGNED</span>';
+      const createdStr = u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Initial';
+      const lastLoginStr = u.last_login ? new Date(u.last_login).toLocaleString() : 'Never';
+
+      return `
+        <tr>
+          <td>
+            <strong>${escapeHtml(u.name || u.username)}</strong>
+            <div class="user-mgmt-sub">@${escapeHtml(u.username)} ${u.email ? '• ' + escapeHtml(u.email) : ''}</div>
+          </td>
+          <td>${roleBadge}</td>
+          <td class="text-dim">${createdStr}</td>
+          <td class="text-dim">${lastLoginStr}</td>
+          <td>
+            ${isSelf 
+              ? '<span class="user-role-chip role-admin" style="opacity:0.8;">(You)</span>' 
+              : `<button class="btn btn-xs btn-outline-danger" onclick="deleteTeamUser(${u.id}, '${escapeHtml(u.username)}')" title="Delete account">🗑️ Delete</button>`
+            }
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Failed to load team users:', err);
+  }
+}
+
+async function createUserAccount(e) {
+  if (e) e.preventDefault();
+  const usernameInput = document.getElementById('new-user-username');
+  const nameInput = document.getElementById('new-user-name');
+  const passwordInput = document.getElementById('new-user-password');
+  const roleInput = document.getElementById('new-user-role');
+
+  const username = usernameInput ? usernameInput.value.trim() : '';
+  const name = nameInput ? nameInput.value.trim() : '';
+  const password = passwordInput ? passwordInput.value : '';
+  const role = roleInput ? roleInput.value : 'assigned';
+
+  if (!username || !password) {
+    alert('Username and password are required');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, name, password, role })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showLeadNotificationToast('✅ Team Account Created', `Added @${username} as ${role.toUpperCase()}.`);
+      if (usernameInput) usernameInput.value = '';
+      if (nameInput) nameInput.value = '';
+      if (passwordInput) passwordInput.value = '';
+      loadTeamUsers();
+    } else {
+      alert(data.error || 'Failed to create user account');
+    }
+  } catch (err) {
+    console.error('Create user error:', err);
+    alert('Error creating user account');
+  }
+}
+
+async function deleteTeamUser(id, username) {
+  if (!confirm(`Are you sure you want to delete user account @${username}?`)) return;
+  try {
+    const res = await fetch(`/api/auth/users/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showLeadNotificationToast('🗑️ User Removed', `Account @${username} deleted.`);
+      loadTeamUsers();
+    } else {
+      alert(data.error || 'Failed to delete user');
+    }
+  } catch (err) {
+    console.error('Delete user error:', err);
+    alert('Error deleting user');
+  }
+}
+
 // State
 let allLeads = [];
 let currentActionLeadId = null;
@@ -12,13 +389,22 @@ let modalKeywords = [];
 let activePublicUrl = '';
 
 // Initialization
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // First verify session
+  const isAuthenticated = await checkAuthSession();
+  if (!isAuthenticated) {
+    showLoginOverlay();
+    return;
+  }
+
   initWebSocket();
   checkPlatformStatuses(false);
   loadSearchKeywords();
   loadStats();
   loadLeads();
-  loadSettings();
+  if (currentUser?.role === 'admin') {
+    loadSettings();
+  }
   loadTunnelStatus();
   checkCdpStatus();
   loadMapsStats();
@@ -31,11 +417,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Periodic poll for stats & CDP & live platform statuses
-  setInterval(loadStats, 10000);
-  setInterval(loadMapsStats, 12000);
-  setInterval(loadScorecardStats, 12000);
-  setInterval(checkCdpStatus, 15000);
-  setInterval(() => checkPlatformStatuses(false), 30000);
+  setInterval(() => { if (authToken) loadStats(); }, 10000);
+  setInterval(() => { if (authToken) loadMapsStats(); }, 12000);
+  setInterval(() => { if (authToken) loadScorecardStats(); }, 12000);
+  setInterval(() => { if (authToken) checkCdpStatus(); }, 15000);
+  setInterval(() => { if (authToken) checkPlatformStatuses(false); }, 30000);
 });
 
 window.addEventListener('hashchange', () => {
@@ -47,6 +433,15 @@ window.addEventListener('hashchange', () => {
 
 // ==================== TAB NAVIGATION ====================
 function switchTab(tabId, updateHash = true) {
+  // Role check: assigned specialists can only access overview, leads, maps, scorecard, studio
+  if (currentUser && currentUser.role === 'assigned') {
+    const adminTabs = ['autopilot', 'knowledge', 'accounts', 'settings'];
+    if (adminTabs.includes(tabId)) {
+      showLeadNotificationToast('🔒 Admin Restricted', 'Only Administrators have access to engine configuration and settings.');
+      return;
+    }
+  }
+
   document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
 
@@ -83,18 +478,64 @@ function switchTab(tabId, updateHash = true) {
   }
   if (tabId === 'knowledge') loadKnowledgeFiles();
   if (tabId === 'autopilot') checkCdpStatus();
+  if (tabId === 'settings') loadTeamUsers();
 }
 
 // ==================== WEBSOCKET & LIVE TERMINAL ====================
-function initWebSocket() {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${protocol}//${window.location.host}`;
+let wsFallbackTimer = null;
 
-  ws = new WebSocket(wsUrl);
+function startWebSocketFallback() {
+  if (wsFallbackTimer) return;
+  const indicator = document.getElementById('ws-indicator');
+  if (indicator && indicator.innerText !== 'Connected & Listening') {
+    indicator.innerText = 'Connected (Cloud Sync)';
+  }
+  wsFallbackTimer = setInterval(() => {
+    if (authToken) {
+      loadStats();
+      loadTunnelStatus();
+    }
+  }, 8000);
+}
+
+function initWebSocket() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  const isNetlify = window.location.hostname.includes('netlify.app');
+  let wsHost = window.location.host;
+  let wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+  // If on Netlify static hosting, connect directly to active backend Cloudflare tunnel
+  if (isNetlify) {
+    wsHost = 'crm.thedigitalfrog.com';
+    wsProtocol = 'wss:';
+  }
+
+  const wsUrl = `${wsProtocol}//${wsHost}`;
+
+  try {
+    ws = new WebSocket(wsUrl);
+  } catch (err) {
+    console.warn('WebSocket init exception:', err);
+    startWebSocketFallback();
+    return;
+  }
 
   ws.onopen = () => {
-    document.getElementById('ws-indicator').innerText = 'Connected & Listening';
+    if (wsFallbackTimer) {
+      clearInterval(wsFallbackTimer);
+      wsFallbackTimer = null;
+    }
+    const indicator = document.getElementById('ws-indicator');
+    if (indicator) indicator.innerText = 'Connected & Listening';
     appendTerminalLog('Connected to Anti-Gravity Real-Time Event Hub', 'text-success');
+  };
+
+  ws.onerror = (err) => {
+    console.warn('WebSocket connection error, starting HTTP sync fallback:', err);
+    startWebSocketFallback();
   };
 
   ws.onmessage = (event) => {
@@ -188,8 +629,10 @@ function initWebSocket() {
   };
 
   ws.onclose = () => {
-    document.getElementById('ws-indicator').innerText = 'Reconnecting...';
-    setTimeout(initWebSocket, 3000);
+    const indicator = document.getElementById('ws-indicator');
+    if (indicator) indicator.innerText = 'Syncing (HTTP)...';
+    startWebSocketFallback();
+    setTimeout(initWebSocket, 6000);
   };
 }
 
@@ -982,6 +1425,9 @@ function renderLeadsCards(leads, container) {
           ` : `
             <span class="converted-tag">🎉 Converted Client</span>
           `}
+          <button class="btn btn-sm btn-outline text-danger" onclick="deleteSocialLead(${lead.id})" title="Delete Lead">
+            <span>🗑️</span>
+          </button>
         </div>
       </div>
     `;
@@ -1045,6 +1491,7 @@ function renderLeadsTable(leads, container) {
             <button class="btn btn-xs btn-secondary" onclick="openActionModal(${lead.id}, 'dm')" title="Send DM">✉️ DM</button>
             <button class="btn-quality btn-quality-correct ${lead.feedback === 'correct' ? 'active' : ''}" onclick="rateLeadQuality(${lead.id}, 'correct')" title="Correct Lead">👍</button>
             <button class="btn-quality btn-quality-incorrect" onclick="rateLeadQuality(${lead.id}, 'incorrect')" title="Not a Lead">👎</button>
+            <button class="btn btn-xs btn-outline-danger" onclick="deleteSocialLead(${lead.id})" title="Delete Lead">🗑️</button>
           </div>
         </td>
       </tr>
@@ -1421,6 +1868,25 @@ async function markLeadStatus(id, status) {
     loadStats();
   } catch (e) {
     console.error(e);
+  }
+}
+
+async function deleteSocialLead(id) {
+  if (!confirm('Are you sure you want to permanently delete this lead?')) return;
+  try {
+    const res = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showLeadNotificationToast('🗑️ Lead Deleted', 'Social lead removed from CRM.');
+      allLeads = allLeads.filter(l => l.id !== id);
+      renderLeads(allLeads);
+      loadStats();
+    } else {
+      alert(data.error || 'Failed to delete lead');
+    }
+  } catch (err) {
+    console.error('Delete lead error:', err);
+    alert('Error deleting lead');
   }
 }
 
@@ -2739,11 +3205,14 @@ function renderSocialAuditModal(lead) {
   }
 }
 
-function copyReelHookText(text) {
+async function copyReelHookText(text) {
   if (!text) return;
-  navigator.clipboard.writeText(text).then(() => {
+  const ok = await copyToClipboard(text);
+  if (ok) {
     showLeadNotificationToast('📋 Hook Copied', 'Viral Reel Hook script copied to clipboard!');
-  }).catch(() => alert('Copied hook script!'));
+  } else {
+    alert('Copied hook script!');
+  }
 }
 
 async function refreshActiveSocialAudit() {
@@ -2804,7 +3273,7 @@ function switchPitchSubTab(type) {
   if (pEmail) pEmail.style.display = type === 'email' ? 'block' : 'none';
 }
 
-function copyPitchText(type) {
+async function copyPitchText(type) {
   let text = '';
   if (type === 'rx') text = document.getElementById('pitch-text-rx')?.innerText || '';
   if (type === 'call') text = document.getElementById('pitch-text-call')?.innerText || '';
@@ -2812,11 +3281,12 @@ function copyPitchText(type) {
   if (type === 'email') text = document.getElementById('pitch-text-email')?.innerText || '';
 
   if (text) {
-    navigator.clipboard.writeText(text).then(() => {
+    const ok = await copyToClipboard(text);
+    if (ok) {
       showLeadNotificationToast('📋 Copied to Clipboard', `Pitch copied! Ready to paste into dialer, WhatsApp, or email.`);
-    }).catch(() => {
+    } else {
       alert('Copied pitch text!');
-    });
+    }
   }
 }
 
@@ -2909,17 +3379,18 @@ async function deleteMapsLead(leadId) {
 }
 
 function exportMapsCsv() {
-  window.open('/api/maps/export/csv', '_blank');
+  const tokenParam = authToken ? `?token=${encodeURIComponent(authToken)}` : '';
+  window.open(`/api/maps/export/csv${tokenParam}`, '_blank');
 }
 
 // ==================== INBOUND SCORECARD LEADS CRM ====================
 let allScorecardLeads = [];
 let activeScorecardLead = null;
 
-function copyScorecardPublicLink() {
+async function copyScorecardPublicLink() {
   const base = (activePublicUrl || window.location.origin).replace(/\/+$/, '');
   const url = `${base}/scorecard`;
-  navigator.clipboard.writeText(url);
+  await copyToClipboard(url);
   showLeadNotificationToast('🔗 Live Test Link Copied!', `Public shareable audit link copied to clipboard:\n${url}\n\n(Works on any mobile phone, tablet, or client computer outside your laptop)`);
 }
 
@@ -3195,10 +3666,10 @@ function closeScorecardDetailModal() {
   activeScorecardLead = null;
 }
 
-function copyScorecardModalRx() {
+async function copyScorecardModalRx() {
   const text = document.getElementById('modal-sc-rx-pre')?.innerText || '';
   if (text) {
-    navigator.clipboard.writeText(text);
+    await copyToClipboard(text);
     showLeadNotificationToast('📋 Copied!', '℞ Prescription copied to clipboard.');
   }
 }

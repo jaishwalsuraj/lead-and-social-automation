@@ -117,9 +117,19 @@
           <button class="btn btn-secondary" onclick="copyScorecardPublicLink()" id="btn-copy-scorecard" title="Copy public link to send to doctors or prospects">
             <span>🔗 Copy Test Link</span>
           </button>
-          <button class="btn btn-secondary" onclick="openLoginModal()" id="btn-quick-login">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
-            <span>Open Browser Login</span>
+          <!-- User Profile & Sign Out Badge -->
+          <div class="user-profile-badge" id="user-profile-badge" style="display: none;">
+            <span class="user-avatar-circle" id="user-avatar-icon">👑</span>
+            <div class="user-profile-info">
+              <span class="user-profile-name" id="user-display-name">Admin</span>
+              <span class="user-role-chip role-admin" id="user-display-role">ADMIN</span>
+            </div>
+            <button class="btn btn-xs btn-outline-danger" onclick="logoutUser()" title="Sign out of CRM" style="margin-left: 0.35rem; padding: 2px 7px;">
+              <span>Logout ⎋</span>
+            </button>
+          </div>
+          <button class="btn btn-secondary" onclick="showLoginOverlay()" id="btn-header-login" style="display: none;">
+            <span>Sign In 🔑</span>
           </button>
           <button class="btn btn-primary" onclick="triggerLeadScan()" id="btn-run-scan">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -831,6 +841,64 @@
             <button type="submit" class="btn btn-primary">Save Settings</button>
           </form>
         </div>
+
+        <!-- Team & User Access Management (Admin only) -->
+        <div class="panel-card mb-4" id="section-user-mgmt">
+          <div class="panel-header">
+            <div>
+              <h2>👥 Team & User Access Management</h2>
+              <p class="subtitle">Grant access to assigned outreach specialists and team administrators.</p>
+            </div>
+            <button class="btn btn-sm btn-outline" onclick="loadTeamUsers()">↻ Refresh Users</button>
+          </div>
+
+          <!-- Add Team Member Form -->
+          <form id="form-add-user" onsubmit="createUserAccount(event)" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem;">
+            <div style="font-weight: 700; color: #f8fafc; font-size: 0.9rem; margin-bottom: 0.85rem;">➕ Add New Team Member</div>
+            <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;">
+              <div class="form-group" style="margin: 0;">
+                <label for="new-user-username">Username</label>
+                <input type="text" id="new-user-username" placeholder="e.g. jessica" required>
+              </div>
+              <div class="form-group" style="margin: 0;">
+                <label for="new-user-name">Full Name</label>
+                <input type="text" id="new-user-name" placeholder="e.g. Jessica Miller" required>
+              </div>
+              <div class="form-group" style="margin: 0;">
+                <label for="new-user-password">Password</label>
+                <input type="password" id="new-user-password" placeholder="At least 6 chars" required>
+              </div>
+              <div class="form-group" style="margin: 0;">
+                <label for="new-user-role">Role</label>
+                <select id="new-user-role" class="filter-select" style="width: 100%; padding: 0.65rem 0.75rem;">
+                  <option value="assigned" selected>👤 Assigned Specialist (Leads & Outreach)</option>
+                  <option value="admin">👑 Administrator (Full Control)</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary" style="margin-top: 1rem;">
+              <span>Create Team Account</span>
+            </button>
+          </form>
+
+          <!-- Current Users Table -->
+          <div style="overflow-x: auto;">
+            <table class="user-mgmt-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Created</th>
+                  <th>Last Login</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="team-users-tbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <!-- TAB 6: AUTOPILOT RUNNER (META-AUTOMATION ENGINE) -->
@@ -1371,6 +1439,62 @@
     </div>
   </div>
 
-  <script src="app.js?v=9"></script>
+  <!-- ==================== RESTRICTED ACCESS LOGIN MODAL OVERLAY ==================== -->
+  <div id="login-overlay" style="display: none;">
+    <div class="login-window-card">
+      <div class="login-header">
+        <div class="login-emblem">🐸</div>
+        <h2 class="login-title">The Digital Frog</h2>
+        <p class="login-subtitle">Anti-Gravity Growth Hub & Lead Outreach Engine</p>
+      </div>
+      <div class="login-body">
+        <div class="login-error-alert" id="login-error-alert">
+          <span>⚠️</span>
+          <span id="login-error-text">Invalid username or password</span>
+        </div>
+
+        <!-- Quick Fill Role Chips -->
+        <div class="login-quick-chips">
+          <button type="button" class="login-chip-btn login-chip-admin" onclick="quickFillLogin('admin')" title="Auto-fill admin credentials">
+            <span>👑 Quick: Admin</span>
+          </button>
+          <button type="button" class="login-chip-btn login-chip-assigned" onclick="quickFillLogin('assigned')" title="Auto-fill assigned outreach specialist credentials">
+            <span>👤 Quick: Assigned</span>
+          </button>
+        </div>
+
+        <form id="login-form" onsubmit="doLogin(event)">
+          <div class="login-field">
+            <label class="login-label" for="login-username">Username</label>
+            <div class="login-input-wrap">
+              <input type="text" id="login-username" class="login-input" placeholder="e.g. admin or assigned" autocomplete="username" required autofocus>
+            </div>
+          </div>
+
+          <div class="login-field">
+            <label class="login-label" for="login-password">Password</label>
+            <div class="login-input-wrap">
+              <input type="password" id="login-password" class="login-input" placeholder="Enter your password" autocomplete="current-password" required>
+              <button type="button" class="login-toggle-pw" onclick="toggleLoginPasswordVisibility()" title="Show/Hide Password">👁️</button>
+            </div>
+          </div>
+
+          <button type="submit" class="login-submit-btn" id="btn-submit-login">
+            <span>Sign In to Growth Hub 🚀</span>
+          </button>
+        </form>
+
+        <div class="login-footer-notice">
+          <div>🩺 <strong>Public Scorecard Diagnostics:</strong></div>
+          <div>Prospects can take the 2-Minute Diagnostic without logging in at:</div>
+          <div style="margin-top: 0.25rem;">
+            <a href="/scorecard" target="_blank" id="login-pub-scorecard-link">/scorecard ↗</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=10"></script>
 </body>
 </html>

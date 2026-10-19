@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -254,6 +255,18 @@ export function initDatabase() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'assigned',
+        name TEXT NOT NULL,
+        email TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_login DATETIME
+      );
     `);
 
     // Verification columns on social leads table
@@ -418,7 +431,93 @@ export function initDatabase() {
       insertLead.run(l);
     }
   }
+
+  // Seed default admin and assigned users if empty
+  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+  if (userCount === 0) {
+    UserModel.create({
+      username: 'admin',
+      password: 'admin123',
+      role: 'admin',
+      name: 'Lead & Social Admin',
+      email: 'admin@thedigitalfrog.com'
+    });
+    UserModel.create({
+      username: 'assigned',
+      password: 'assigned123',
+      role: 'assigned',
+      name: 'Growth Specialist',
+      email: 'team@thedigitalfrog.com'
+    });
+  }
 }
+
+// ==================== AUTHENTICATION & USER MANAGEMENT ====================
+export function hashPassword(password, salt = null) {
+  const s = salt || crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, s, 64).toString('hex');
+  return { hash, salt: s };
+}
+
+export function verifyPassword(password, hash, salt) {
+  try {
+    const testHash = crypto.scryptSync(password, salt, 64).toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(testHash, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
+export const UserModel = {
+  create: ({ username, password, role = 'assigned', name, email = null }) => {
+    const { hash, salt } = hashPassword(password);
+    const stmt = db.prepare(`
+      INSERT INTO users (username, password_hash, salt, role, name, email)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    const info = stmt.run(username.toLowerCase().trim(), hash, salt, role, name || username, email);
+    return info.lastInsertRowid;
+  },
+
+  findByUsername: (username) => {
+    if (!username) return null;
+    return db.prepare('SELECT * FROM users WHERE LOWER(username) = LOWER(?)').get(username.trim());
+  },
+
+  findById: (id) => {
+    return db.prepare('SELECT id, username, role, name, email, created_at, last_login FROM users WHERE id = ?').get(id);
+  },
+
+  getAll: () => {
+    return db.prepare('SELECT id, username, role, name, email, created_at, last_login FROM users ORDER BY created_at ASC').all();
+  },
+
+  verifyPassword: (user, password) => {
+    if (!user || !user.password_hash || !user.salt) return false;
+    return verifyPassword(password, user.password_hash, user.salt);
+  },
+
+  updatePassword: (id, newPassword) => {
+    const { hash, salt } = hashPassword(newPassword);
+    return db.prepare('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?').run(hash, salt, id);
+  },
+
+  updateLastLogin: (id) => {
+    return db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  },
+
+  delete: (id) => {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    if (!user) return { success: false, error: 'User not found' };
+    if (user.role === 'admin') {
+      const adminCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'admin'").get().count;
+      if (adminCount <= 1) {
+        throw new Error('Cannot delete the sole Administrator account');
+      }
+    }
+    return db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  }
+};
 
 // Helper methods for easy querying
 export const LeadModel = {
@@ -792,6 +891,10 @@ export const LeadModel = {
     const dead = db.prepare(`SELECT COUNT(*) as count FROM leads WHERE verification_status = 'dead'`).get().count;
 
     return { total, discovered, engaged, dm_sent, converted, high_intent, correct_feedback, incorrect_feedback, verified, dead };
+  },
+
+  delete: (id) => {
+    return db.prepare('DELETE FROM leads WHERE id = ?').run(id);
   }
 };
 

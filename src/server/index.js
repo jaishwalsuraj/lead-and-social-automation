@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
@@ -6,7 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
-import { LeadModel, LogModel, PostModel, QuotaModel, SettingsModel, GoogleMapsLeadModel, ScorecardLeadModel } from '../db/database.js';
+import { LeadModel, LogModel, PostModel, QuotaModel, SettingsModel, GoogleMapsLeadModel, ScorecardLeadModel, UserModel } from '../db/database.js';
 import { browserManager } from '../browser/browserManager.js';
 import { orchestrator } from '../agent/orchestrator.js';
 import { reasoner } from '../agent/geminiReasoner.js';
@@ -41,10 +42,154 @@ wss.on('connection', (ws) => {
   }));
 });
 
+// ==================== AUTHENTICATION & SECURITY MIDDLEWARE ====================
+const SESSION_SECRET = process.env.SESSION_SECRET || 'antigravity-frog-growth-secret-token-key-2026';
+
+function createAuthToken(user) {
+  const payload = `${user.id}:${user.username}:${user.role}:${Date.now()}`;
+  const signature = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
+  return Buffer.from(`${payload}:${signature}`).toString('base64');
+}
+
+function verifyAuthToken(token) {
+  if (!token) return null;
+  try {
+    const decoded = Buffer.from(token, 'base64').toString('utf8');
+    const parts = decoded.split(':');
+    if (parts.length < 5) return null;
+    const [id, username, role, timestamp, signature] = parts;
+    const payload = `${id}:${username}:${role}:${timestamp}`;
+    const expectedSig = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
+    if (signature !== expectedSig) return null;
+    const ageMs = Date.now() - parseInt(timestamp, 10);
+    // Token valid for 30 days
+    if (ageMs > 30 * 24 * 60 * 60 * 1000) return null;
+    return { id: parseInt(id, 10), username, role };
+  } catch {
+    return null;
+  }
+}
+
+function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const headerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  const token = headerToken || req.query.token;
+  const user = verifyAuthToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Unauthorized: Authentication required to view leads or progress' });
+  }
+  req.user = user;
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden: Administrator privileges required for this operation' });
+  }
+  next();
+}
+
+// ==================== AUTH API ROUTES ====================
+
+// User login (Admin & Assigned)
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+  const user = UserModel.findByUsername(username);
+  if (!user || !UserModel.verifyPassword(user, password)) {
+    return res.status(401).json({ error: 'Invalid username or password' });
+  }
+  UserModel.updateLastLogin(user.id);
+  const token = createAuthToken(user);
+  res.json({
+    success: true,
+    token,
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      name: user.name,
+      email: user.email
+    }
+  });
+});
+
+// Current user profile
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  const user = UserModel.findById(req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json({ user });
+});
+
+// Logout
+app.post('/api/auth/logout', (req, res) => {
+  res.json({ success: true, message: 'Logged out successfully' });
+});
+
+// List team users (Admin only)
+app.get('/api/auth/users', requireAuth, requireAdmin, (req, res) => {
+  res.json({ users: UserModel.getAll() });
+});
+
+// Create team user (Admin only)
+app.post('/api/auth/users', requireAuth, requireAdmin, (req, res) => {
+  const { username, password, role, name, email } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+  if (UserModel.findByUsername(username)) {
+    return res.status(400).json({ error: 'Username already exists' });
+  }
+  try {
+    const id = UserModel.create({
+      username,
+      password,
+      role: role === 'admin' ? 'admin' : 'assigned',
+      name: name || username,
+      email
+    });
+    res.json({ success: true, id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete team user (Admin only)
+app.delete('/api/auth/users/:id', requireAuth, requireAdmin, (req, res) => {
+  try {
+    UserModel.delete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Change user password
+app.post('/api/auth/change-password', requireAuth, (req, res) => {
+  const { currentPassword, newPassword, targetUserId } = req.body;
+  const targetId = (req.user.role === 'admin' && targetUserId) ? targetUserId : req.user.id;
+  const user = UserModel.findById(targetId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  if (req.user.id === targetId) {
+    const fullUser = UserModel.findByUsername(user.username);
+    if (!UserModel.verifyPassword(fullUser, currentPassword)) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+  }
+  if (!newPassword || newPassword.length < 5) {
+    return res.status(400).json({ error: 'New password must be at least 5 characters' });
+  }
+  UserModel.updatePassword(targetId, newPassword);
+  res.json({ success: true, message: 'Password updated successfully' });
+});
+
 // ==================== REST API ROUTES ====================
 
 // System Stats
-app.get('/api/stats', (req, res) => {
+app.get('/api/stats', requireAuth, (req, res) => {
   const stats = LeadModel.getStats();
   const quotas = {
     threads: QuotaModel.getToday('threads'),
@@ -55,8 +200,8 @@ app.get('/api/stats', (req, res) => {
   res.json({ stats, quotas });
 });
 
-// Platform Auth Check
-app.get('/api/platforms', async (req, res) => {
+// Platform Auth Check (Admin only)
+app.get('/api/platforms', requireAuth, requireAdmin, async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === 'true';
     const statuses = await browserManager.getConnectedPlatforms(forceRefresh);
@@ -66,8 +211,8 @@ app.get('/api/platforms', async (req, res) => {
   }
 });
 
-// Open Interactive Login Window
-app.post('/api/browser/login', async (req, res) => {
+// Open Interactive Login Window (Admin only)
+app.post('/api/browser/login', requireAuth, requireAdmin, async (req, res) => {
   const { platform } = req.body;
   try {
     const result = await browserManager.launchInteractiveLogin(platform || 'threads');
@@ -78,7 +223,7 @@ app.post('/api/browser/login', async (req, res) => {
 });
 
 // Lead Management
-app.get('/api/leads', async (req, res) => {
+app.get('/api/leads', requireAuth, async (req, res) => {
   const { status, limit, maxDays, feedback, connectedOnly, sortBy } = req.query;
   const parsedLimit = parseInt(limit || '200', 10);
   const safeLimit = isNaN(parsedLimit) || parsedLimit <= 0 ? 200 : Math.min(parsedLimit, 1000);
@@ -111,7 +256,7 @@ app.get('/api/leads', async (req, res) => {
 });
 
 // Dynamic AI Keyword Expander
-app.post('/api/keywords/expand', async (req, res) => {
+app.post('/api/keywords/expand', requireAuth, async (req, res) => {
   const { topic, niche } = req.body;
   try {
     const targetNiche = niche || SettingsModel.get('niche_target') || 'E-commerce, SaaS, and Digital Product Sales';
@@ -123,7 +268,7 @@ app.post('/api/keywords/expand', async (req, res) => {
 });
 
 // Save Search Keywords
-app.post('/api/keywords/save', (req, res) => {
+app.post('/api/keywords/save', requireAuth, (req, res) => {
   const { keywords } = req.body;
   if (!Array.isArray(keywords)) {
     return res.status(400).json({ error: 'Keywords must be an array of strings' });
@@ -133,7 +278,7 @@ app.post('/api/keywords/save', (req, res) => {
 });
 
 // Record User Lead Feedback (Quality Correct vs Incorrect)
-app.post('/api/leads/:id/feedback', (req, res) => {
+app.post('/api/leads/:id/feedback', requireAuth, (req, res) => {
   const { feedback, notes } = req.body;
   try {
     const updatedLead = LeadModel.setFeedback(req.params.id, feedback, notes);
@@ -145,18 +290,18 @@ app.post('/api/leads/:id/feedback', (req, res) => {
 });
 
 // Get Learned Lead Intelligence Rules
-app.get('/api/leads/learning/rules', (req, res) => {
+app.get('/api/leads/learning/rules', requireAuth, (req, res) => {
   const { type } = req.query;
   res.json(LeadModel.getLearningRules(type || null));
 });
 
 // Get Permanently Blocked Authors (marked "Not a Lead")
-app.get('/api/leads/blocked-authors', (req, res) => {
+app.get('/api/leads/blocked-authors', requireAuth, (req, res) => {
   res.json(LeadModel.getBlockedAuthors());
 });
 
 // Verify All Active Social Leads (Purges 404s, deleted/disabled accounts)
-app.post('/api/leads/verify-all', async (req, res) => {
+app.post('/api/leads/verify-all', requireAuth, async (req, res) => {
   try {
     orchestrator.broadcast('log', { platform: 'system', text: '🛡️ Starting Live Lead Verification across all social profiles...' });
     const result = await leadVerifier.verifyAllActiveLeads((progress) => {
@@ -174,7 +319,7 @@ app.post('/api/leads/verify-all', async (req, res) => {
 });
 
 // Verify Single Lead
-app.post('/api/leads/:id/verify', async (req, res) => {
+app.post('/api/leads/:id/verify', requireAuth, async (req, res) => {
   try {
     const result = await leadVerifier.verifyLead(req.params.id);
     orchestrator.broadcast('leads_updated', { stats: LeadModel.getStats() });
@@ -185,7 +330,7 @@ app.post('/api/leads/:id/verify', async (req, res) => {
 });
 
 // Trigger Lead Scan (uses connected platforms only & supports topic / custom keywords)
-app.post('/api/leads/scan', async (req, res) => {
+app.post('/api/leads/scan', requireAuth, async (req, res) => {
   if (orchestrator.isRunning) {
     return res.status(409).json({ 
       success: false, 
@@ -204,7 +349,7 @@ app.post('/api/leads/scan', async (req, res) => {
 });
 
 // Engage Lead (Comment)
-app.post('/api/leads/:id/engage', async (req, res) => {
+app.post('/api/leads/:id/engage', requireAuth, async (req, res) => {
   try {
     const { customComment } = req.body;
     const result = await orchestrator.engageLead(req.params.id, customComment);
@@ -215,7 +360,7 @@ app.post('/api/leads/:id/engage', async (req, res) => {
 });
 
 // Send DM Follow-Up
-app.post('/api/leads/:id/dm', async (req, res) => {
+app.post('/api/leads/:id/dm', requireAuth, async (req, res) => {
   try {
     const { customDM } = req.body;
     const result = await orchestrator.sendFollowUpDM(req.params.id, customDM);
@@ -226,7 +371,7 @@ app.post('/api/leads/:id/dm', async (req, res) => {
 });
 
 // Regenerate Contextual AI Comment (Short, High-Converting)
-app.post('/api/leads/:id/generate-comment', async (req, res) => {
+app.post('/api/leads/:id/generate-comment', requireAuth, async (req, res) => {
   try {
     const lead = LeadModel.getById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
@@ -249,7 +394,7 @@ app.post('/api/leads/:id/generate-comment', async (req, res) => {
 });
 
 // Regenerate AI 1-on-1 DM
-app.post('/api/leads/:id/generate-dm', async (req, res) => {
+app.post('/api/leads/:id/generate-dm', requireAuth, async (req, res) => {
   try {
     const lead = LeadModel.getById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
@@ -263,14 +408,24 @@ app.post('/api/leads/:id/generate-dm', async (req, res) => {
 });
 
 // Update Lead Status
-app.post('/api/leads/:id/status', (req, res) => {
+app.post('/api/leads/:id/status', requireAuth, (req, res) => {
   const { status } = req.body;
   LeadModel.updateStatus(req.params.id, status);
   res.json({ success: true });
 });
 
+// Delete Social Lead
+app.delete('/api/leads/:id', requireAuth, (req, res) => {
+  try {
+    LeadModel.delete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Content Studio: Generate Post
-app.post('/api/posts/generate', async (req, res) => {
+app.post('/api/posts/generate', requireAuth, async (req, res) => {
   const { platform, topic, niche } = req.body;
   try {
     const content = await reasoner.generateSocialContent(platform || 'linkedin', topic, niche);
@@ -281,7 +436,7 @@ app.post('/api/posts/generate', async (req, res) => {
 });
 
 // Content Studio: Publish Post
-app.post('/api/posts/publish', async (req, res) => {
+app.post('/api/posts/publish', requireAuth, async (req, res) => {
   const { platform, content } = req.body;
   try {
     const result = await orchestrator.publishPost(platform, content);
@@ -300,8 +455,8 @@ app.post('/api/posts/publish', async (req, res) => {
   }
 });
 
-// Settings
-app.get('/api/settings', (req, res) => {
+// Settings (Admin only)
+app.get('/api/settings', requireAuth, requireAdmin, (req, res) => {
   const settings = SettingsModel.getAll();
   const tunnelStatus = tunnelManager.getStatus();
   settings.public_url = tunnelStatus.publicUrl || settings.public_url || `${req.protocol}://${req.get('host')}`;
@@ -310,7 +465,7 @@ app.get('/api/settings', (req, res) => {
   res.json(settings);
 });
 
-app.post('/api/settings', (req, res) => {
+app.post('/api/settings', requireAuth, requireAdmin, (req, res) => {
   const newSettings = req.body;
   for (const [key, value] of Object.entries(newSettings)) {
     SettingsModel.set(key, value);
@@ -318,12 +473,12 @@ app.post('/api/settings', (req, res) => {
   res.json({ success: true, settings: SettingsModel.getAll() });
 });
 
-// Cloudflare Public Tunnel Management
+// Cloudflare Public Tunnel Management (Status is public, Start is Admin only)
 app.get('/api/tunnel/status', (req, res) => {
   res.json(tunnelManager.getStatus());
 });
 
-app.post('/api/tunnel/start', async (req, res) => {
+app.post('/api/tunnel/start', requireAuth, requireAdmin, async (req, res) => {
   const port = process.env.PORT || 3000;
   const result = await tunnelManager.start(port);
   res.json(result);
@@ -332,7 +487,7 @@ app.post('/api/tunnel/start', async (req, res) => {
 // ==================== GOOGLE MAPS LOCAL LEAD HUNTER ROUTES ====================
 
 // Trigger Google Maps Local Lead Scan
-app.post('/api/maps/scan', async (req, res) => {
+app.post('/api/maps/scan', requireAuth, async (req, res) => {
   const { query, location, limit, noWebsiteOnly } = req.body;
   if (!query) {
     return res.status(400).json({ error: 'Business category or keyword is required' });
@@ -372,7 +527,7 @@ app.post('/api/maps/scan', async (req, res) => {
 });
 
 // Get Google Maps Leads
-app.get('/api/maps/leads', (req, res) => {
+app.get('/api/maps/leads', requireAuth, (req, res) => {
   try {
     const leads = GoogleMapsLeadModel.getAll(req.query);
     res.json(leads);
@@ -382,7 +537,7 @@ app.get('/api/maps/leads', (req, res) => {
 });
 
 // Get Google Maps Leads Summary Stats
-app.get('/api/maps/stats', (req, res) => {
+app.get('/api/maps/stats', requireAuth, (req, res) => {
   try {
     const stats = GoogleMapsLeadModel.getStats();
     res.json(stats);
@@ -392,7 +547,7 @@ app.get('/api/maps/stats', (req, res) => {
 });
 
 // Update Google Maps Lead Status
-app.post('/api/maps/leads/:id/status', (req, res) => {
+app.post('/api/maps/leads/:id/status', requireAuth, (req, res) => {
   const { status } = req.body;
   try {
     GoogleMapsLeadModel.updateStatus(req.params.id, status);
@@ -403,7 +558,7 @@ app.post('/api/maps/leads/:id/status', (req, res) => {
 });
 
 // Regenerate AI Pitches & Doctor Rx Prescription for Google Maps Lead
-app.post('/api/maps/leads/:id/pitch', (req, res) => {
+app.post('/api/maps/leads/:id/pitch', requireAuth, (req, res) => {
   try {
     const lead = GoogleMapsLeadModel.getById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
@@ -457,7 +612,7 @@ app.post('/api/maps/leads/:id/pitch', (req, res) => {
 });
 
 // Run or Refresh Social Media Audit & AI Avatar Plan for Lead
-app.post('/api/maps/leads/:id/audit', (req, res) => {
+app.post('/api/maps/leads/:id/audit', requireAuth, (req, res) => {
   try {
     const lead = GoogleMapsLeadModel.getById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
@@ -483,7 +638,7 @@ app.post('/api/maps/leads/:id/audit', (req, res) => {
 });
 
 // Delete Google Maps Lead
-app.delete('/api/maps/leads/:id', (req, res) => {
+app.delete('/api/maps/leads/:id', requireAuth, (req, res) => {
   try {
     GoogleMapsLeadModel.delete(req.params.id);
     res.json({ success: true });
@@ -493,7 +648,7 @@ app.delete('/api/maps/leads/:id', (req, res) => {
 });
 
 // Export Google Maps Leads to CSV
-app.get('/api/maps/export/csv', (req, res) => {
+app.get('/api/maps/export/csv', requireAuth, (req, res) => {
   try {
     const csvData = GoogleMapsLeadModel.exportCsv(req.query);
     res.setHeader('Content-Type', 'text/csv');
@@ -505,7 +660,7 @@ app.get('/api/maps/export/csv', (req, res) => {
 });
 
 // Re-verify single Google Maps Lead
-app.post('/api/maps/leads/:id/reverify', async (req, res) => {
+app.post('/api/maps/leads/:id/reverify', requireAuth, async (req, res) => {
   try {
     const updatedLead = await googleMapsAdapter.reverifyLead(req.params.id);
     orchestrator.broadcast('maps_lead_updated', { lead: updatedLead });
@@ -516,7 +671,7 @@ app.post('/api/maps/leads/:id/reverify', async (req, res) => {
 });
 
 // Batch Re-verify all Google Maps Leads
-app.post('/api/maps/reverify-all', (req, res) => {
+app.post('/api/maps/reverify-all', requireAuth, (req, res) => {
   googleMapsAdapter.reverifyAllExistingLeads((progress) => {
     orchestrator.broadcast('maps_reverify_progress', progress);
   }).then(result => {
@@ -533,12 +688,12 @@ app.post('/api/maps/reverify-all', (req, res) => {
 
 // ==================== SCORECARD & DIGITAL HEALTH ASSESSMENT ROUTES ====================
 
-// Public Scorecard Web Page Route
+// Public Scorecard Web Page Route (STRICTLY OPEN / NO LOGIN)
 app.get(['/scorecard', '/audit-test', '/diagnostic'], (req, res) => {
   res.sendFile(path.join(__dirname, '../../public/scorecard.html'));
 });
 
-// Get Scorecard Questions & Config (Branding, Topmate Link)
+// Get Scorecard Questions & Config (STRICTLY OPEN / NO LOGIN)
 app.get('/api/scorecard/config', (req, res) => {
   try {
     const topmateUrl = SettingsModel.get('topmate_url') || 'https://topmate.io/isurajjaiswal';
@@ -558,20 +713,18 @@ app.get('/api/scorecard/config', (req, res) => {
   }
 });
 
-// Submit Scorecard Assessment -> Computes Score, Generates ℞ Prescription, Saves Lead
+// Submit Scorecard Assessment (STRICTLY OPEN / NO LOGIN FOR PROSPECTS)
 app.post('/api/scorecard/submit', async (req, res) => {
   try {
-    const {
-      businessName,
-      contactPerson,
-      phone,
-      email,
-      businessType,
-      city,
-      consultationFee,
-      workTiming,
-      answers = {}
-    } = req.body;
+    const businessName = req.body.businessName || req.body.business_name;
+    const contactPerson = req.body.contactPerson || req.body.contact_person;
+    const phone = req.body.phone;
+    const email = req.body.email;
+    const businessType = req.body.businessType || req.body.business_type;
+    const city = req.body.city;
+    const consultationFee = req.body.consultationFee || req.body.consultation_fee;
+    const workTiming = req.body.workTiming || req.body.work_timing;
+    const answers = req.body.answers || {};
 
     if (!businessName || !contactPerson) {
       return res.status(400).json({ error: 'Business/Clinic Name and Doctor/Contact Person are required.' });
@@ -699,7 +852,7 @@ app.get('/api/scorecard/leads/:id/pdf', (req, res) => {
 });
 
 // Get all Scorecard Leads for CRM
-app.get('/api/scorecard/leads', (req, res) => {
+app.get('/api/scorecard/leads', requireAuth, (req, res) => {
   try {
     const leads = ScorecardLeadModel.getAll(req.query);
     res.json(leads);
@@ -709,7 +862,7 @@ app.get('/api/scorecard/leads', (req, res) => {
 });
 
 // Get Scorecard Leads Summary Stats
-app.get('/api/scorecard/stats', (req, res) => {
+app.get('/api/scorecard/stats', requireAuth, (req, res) => {
   try {
     const stats = ScorecardLeadModel.getStats();
     res.json(stats);
@@ -719,7 +872,7 @@ app.get('/api/scorecard/stats', (req, res) => {
 });
 
 // Update Scorecard Lead Status
-app.post('/api/scorecard/leads/:id/status', (req, res) => {
+app.post('/api/scorecard/leads/:id/status', requireAuth, (req, res) => {
   const { status } = req.body;
   try {
     ScorecardLeadModel.updateStatus(req.params.id, status);
@@ -730,7 +883,7 @@ app.post('/api/scorecard/leads/:id/status', (req, res) => {
 });
 
 // Update Scorecard Lead Notes
-app.post('/api/scorecard/leads/:id/notes', (req, res) => {
+app.post('/api/scorecard/leads/:id/notes', requireAuth, (req, res) => {
   const { notes } = req.body;
   try {
     ScorecardLeadModel.updateNotes(req.params.id, notes);
@@ -741,7 +894,7 @@ app.post('/api/scorecard/leads/:id/notes', (req, res) => {
 });
 
 // Delete Scorecard Lead
-app.delete('/api/scorecard/leads/:id', (req, res) => {
+app.delete('/api/scorecard/leads/:id', requireAuth, (req, res) => {
   try {
     ScorecardLeadModel.delete(req.params.id);
     res.json({ success: true });
@@ -753,7 +906,7 @@ app.delete('/api/scorecard/leads/:id', (req, res) => {
 // ==================== META-AUTOMATION ENGINE ROUTES ====================
 
 // Engine & CDP Status
-app.get('/api/engine/status', async (req, res) => {
+app.get('/api/engine/status', requireAuth, async (req, res) => {
   try {
     const cdpStatus = await metaEngineBridge.isCdpActive(9222);
     const syncRes = metaEngineBridge.syncStateToDatabase();
@@ -768,8 +921,8 @@ app.get('/api/engine/status', async (req, res) => {
   }
 });
 
-// Trigger Engine Threads Scan
-app.post('/api/engine/scan', (req, res) => {
+// Trigger Engine Threads Scan (Admin only)
+app.post('/api/engine/scan', requireAuth, requireAdmin, (req, res) => {
   const { limit } = req.body;
   try {
     metaEngineBridge.scan(
@@ -783,8 +936,8 @@ app.post('/api/engine/scan', (req, res) => {
   }
 });
 
-// Trigger Engine Semantic Lead Analysis
-app.post('/api/engine/analyze', (req, res) => {
+// Trigger Engine Semantic Lead Analysis (Admin only)
+app.post('/api/engine/analyze', requireAuth, requireAdmin, (req, res) => {
   try {
     metaEngineBridge.analyze(
       (line, isErr) => orchestrator.broadcast('log', { platform: 'ai', text: line, error: isErr }),
@@ -796,8 +949,8 @@ app.post('/api/engine/analyze', (req, res) => {
   }
 });
 
-// Trigger Full Social Autopilot
-app.post('/api/engine/autopilot', (req, res) => {
+// Trigger Full Social Autopilot (Admin only)
+app.post('/api/engine/autopilot', requireAuth, requireAdmin, (req, res) => {
   try {
     metaEngineBridge.runSocialAutopilot(
       (line, isErr) => orchestrator.broadcast('log', { platform: 'social', text: line, error: isErr }),
@@ -809,8 +962,8 @@ app.post('/api/engine/autopilot', (req, res) => {
   }
 });
 
-// Trigger Job Revenue Engine
-app.post('/api/engine/job', (req, res) => {
+// Trigger Job Revenue Engine (Admin only)
+app.post('/api/engine/job', requireAuth, requireAdmin, (req, res) => {
   try {
     metaEngineBridge.runJobAutopilot(
       (line, isErr) => orchestrator.broadcast('log', { platform: 'jobs', text: line, error: isErr }),
@@ -822,13 +975,13 @@ app.post('/api/engine/job', (req, res) => {
   }
 });
 
-// Stop Active Engine Process
-app.post('/api/engine/stop', (req, res) => {
+// Stop Active Engine Process (Admin only)
+app.post('/api/engine/stop', requireAuth, requireAdmin, (req, res) => {
   res.json(metaEngineBridge.stopActive());
 });
 
-// Launch Chrome with CDP Port 9222
-app.post('/api/engine/cdp/launch', (req, res) => {
+// Launch Chrome with CDP Port 9222 (Admin only)
+app.post('/api/engine/cdp/launch', requireAuth, requireAdmin, (req, res) => {
   try {
     metaEngineBridge.executeScript(
       'scripts/launch-browser-cdp.js',
@@ -842,10 +995,10 @@ app.post('/api/engine/cdp/launch', (req, res) => {
   }
 });
 
-// ==================== KNOWLEDGE BASE API ROUTES ====================
+// ==================== KNOWLEDGE BASE API ROUTES (Admin only) ====================
 
 // List all knowledge files
-app.get('/api/knowledge', (req, res) => {
+app.get('/api/knowledge', requireAuth, requireAdmin, (req, res) => {
   try {
     res.json({ files: metaEngineBridge.getKnowledgeList() });
   } catch (err) {
@@ -854,7 +1007,7 @@ app.get('/api/knowledge', (req, res) => {
 });
 
 // Read specific knowledge file
-app.get('/api/knowledge/:filename', (req, res) => {
+app.get('/api/knowledge/:filename', requireAuth, requireAdmin, (req, res) => {
   try {
     const filename = req.params.filename;
     if (!filename || !filename.endsWith('.md')) {
@@ -868,7 +1021,7 @@ app.get('/api/knowledge/:filename', (req, res) => {
 });
 
 // Update specific knowledge file
-app.post('/api/knowledge/:filename', (req, res) => {
+app.post('/api/knowledge/:filename', requireAuth, requireAdmin, (req, res) => {
   try {
     const filename = req.params.filename;
     if (!filename || !filename.endsWith('.md')) {
