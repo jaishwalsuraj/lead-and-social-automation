@@ -667,6 +667,10 @@ export const LeadModel = {
     return db.prepare('UPDATE leads SET ai_comment = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(comment, id);
   },
 
+  updateDM: (id, dm) => {
+    return db.prepare('UPDATE leads SET last_dm = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(dm, id);
+  },
+
   updateNotes: (id, notes) => {
     return db.prepare('UPDATE leads SET notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(notes, id);
   },

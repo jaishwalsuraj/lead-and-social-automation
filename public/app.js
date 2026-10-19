@@ -3296,10 +3296,10 @@ function renderMapsLeadCard(lead) {
                 💬 WhatsApp Direct
               </a>
             ` : ''}
+            <button type="button" class="btn btn-sm btn-outline" onclick="triggerLeadEmailClick(${lead.id})" title="Send pre-filled email pitch with clean scorecard link">
+              ✉️ Email Pitch
+            </button>
             ${email ? `
-              <a href="${mailtoUrl}" class="btn btn-sm btn-outline" title="Send pre-filled email pitch">
-                ✉️ Email Pitch
-              </a>
               <button class="btn btn-sm btn-outline" onclick="openReachInboxModal(${lead.id})" title="Sync to ReachInbox campaign">
                 🚀 ReachInbox
               </button>
@@ -3461,14 +3461,11 @@ function openMapsPitchModal(leadId) {
     }
   }
 
-  // Email link in Rx/Blueprint tab
+  // Email button in Rx/Blueprint tab
   const emailRxBtn = document.getElementById('btn-open-email-rx');
   if (emailRxBtn) {
-    const cleanMail = extractCleanEmailPitch(lead, v1.email);
-    const encSub = encodeURIComponent(cleanMail.subject || (isMedical ? `℞ Clinical Growth Prescription for ${lead.business_name}` : `${niche.icon} Growth Blueprint & AI Protocol for ${lead.business_name}`));
-    const encBody = encodeURIComponent(cleanMail.body);
-    emailRxBtn.href = lead.email ? `mailto:${lead.email}?subject=${encSub}&body=${encBody}` : '#';
-    emailRxBtn.style.display = lead.email ? 'inline-flex' : 'none';
+    emailRxBtn.style.display = 'inline-flex';
+    emailRxBtn.title = lead.email ? `Draft & send email to ${lead.email}` : 'Enter recipient email and draft pitch';
   }
 
   // Populate Social Media Audit View
@@ -3499,12 +3496,8 @@ function applyOutreachPitchVersion(ver) {
   }
 
   const emailRxBtn = document.getElementById('btn-open-email-rx');
-  if (emailRxBtn && activeMapsPitchLead) {
-    const cleanMail = extractCleanEmailPitch(activeMapsPitchLead, data.email);
-    const encSub = encodeURIComponent(cleanMail.subject || `Growth Inquiry for ${activeMapsPitchLead.business_name}`);
-    const encBody = encodeURIComponent(cleanMail.body);
-    emailRxBtn.href = activeMapsPitchLead.email ? `mailto:${activeMapsPitchLead.email}?subject=${encSub}&body=${encBody}` : '#';
-    emailRxBtn.style.display = activeMapsPitchLead.email ? 'inline-flex' : 'none';
+  if (emailRxBtn) {
+    emailRxBtn.style.display = 'inline-flex';
   }
 
   // Update WhatsApp links
@@ -3982,7 +3975,9 @@ function renderScorecardCards(leads) {
             <a href="${waUrl}" target="_blank" class="btn btn-sm btn-success">
               <span>💬 WhatsApp</span>
             </a>
-            ${l.email ? `<a href="mailto:${l.email}?subject=℞ Clinical Growth Prescription for ${encodeURIComponent(l.contact_person)}" class="btn btn-sm btn-outline"><span>✉️ Email</span></a>` : ''}
+            <button type="button" class="btn btn-sm btn-outline" onclick="triggerScorecardEmailActionById(${l.id})" title="Send personalized cold email pitch with scorecard">
+              <span>✉️ Send Email</span>
+            </button>
           </div>
 
           <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -4052,10 +4047,10 @@ function openScorecardDetailModal(leadId) {
     pdfBtn.href = lead.pdf_url || `/api/scorecard/leads/${lead.id}/pdf`;
   }
 
-  // Email link
+  // Email button state
   const emailBtn = document.getElementById('modal-sc-email-btn');
   if (emailBtn) {
-    emailBtn.href = lead.email ? `mailto:${lead.email}?subject=℞ Clinical Growth Prescription for ${encodeURIComponent(lead.contact_person)}` : '#';
+    emailBtn.title = lead.email ? `Draft & send email pitch to ${lead.email}` : 'Enter recipient email and draft pitch';
   }
 
   // Prescription text box
@@ -4102,6 +4097,115 @@ async function copyScorecardModalRx() {
 async function updateScorecardStatusFromModal(newStatus) {
   if (!activeScorecardLead) return;
   await updateScorecardLeadStatus(activeScorecardLead.id, newStatus);
+}
+
+// ==================== SMART EMAIL COMPOSER & ACTIONS ====================
+async function openSmartEmailComposer(recipientEmail, subject, body, leadName, leadId = null, leadType = null) {
+  let email = (recipientEmail || '').trim();
+
+  if (!email) {
+    const input = prompt(`No direct email on file for ${leadName || 'this lead'}.\nPlease enter the recipient's email address:`, '');
+    if (!input || !input.trim()) {
+      const shouldCopy = confirm('Would you like to copy the cold email pitch & private scorecard link to your clipboard instead?');
+      if (shouldCopy) {
+        await copyToClipboard(`Subject: ${subject}\n\n${body}`).catch(() => {});
+        showLeadNotificationToast('📋 Pitch Copied!', 'Cold email pitch & private audit link stored in clipboard. Ready to paste!');
+      }
+      return;
+    }
+    email = input.trim();
+    if (leadId && leadType) {
+      const endpoint = leadType === 'scorecard' ? `/api/scorecard/leads/${leadId}/email` : `/api/maps/leads/${leadId}/email`;
+      fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      }).catch(() => {});
+    }
+  }
+
+  // Always copy full email pitch to clipboard for convenience
+  await copyToClipboard(`Subject: ${subject}\n\n${body}`).catch(() => {});
+
+  const encSub = encodeURIComponent(subject);
+  const encBody = encodeURIComponent(body);
+  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encSub}&body=${encBody}`;
+  const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encSub}&body=${encBody}`;
+
+  // Try opening Gmail Web in a new tab first
+  const win = window.open(gmailUrl, '_blank');
+  if (!win || win.closed || typeof win.closed === 'undefined') {
+    // Popup was blocked or user prefers mailto client
+    window.location.href = mailtoUrl;
+    showLeadNotificationToast('✉️ Opening Email App', `Drafting message to ${email}. Pitch text also copied to clipboard!`);
+  } else {
+    showLeadNotificationToast('✉️ Gmail Composer Opened!', `Pre-filled pitch for ${email} loaded in Gmail & copied to clipboard!`);
+  }
+}
+
+async function triggerScorecardEmailAction() {
+  if (!activeScorecardLead) return;
+  const lead = activeScorecardLead;
+  const origin = window.location.origin;
+  const reportUrl = `${origin}/scorecard?report=${lead.id}`;
+  const topmateUrl = 'https://topmate.io/isurajjaiswal';
+  const name = lead.contact_person || 'Director';
+  const business = lead.business_name || 'Practice';
+  const city = lead.city || 'your area';
+
+  const subject = `Quick question regarding ${business} (${city} patient acquisition)`;
+  const body = `Hi ${name},
+
+I reviewed ${business} and put together a private, 2-minute Digital Growth Audit & AI Video Roadmap specifically for your practice.
+
+👉 View Your Custom Practice Scorecard & Video Audit:
+${reportUrl}
+
+It breaks down 3 key opportunities (including how competing practices in ${city} are winning high-ticket cases through short-form educational video) along with 3 viral video concepts tailored for your practice.
+
+Would you be open to a brief 5-minute chat this week on how we can implement this for you on autopilot?
+
+Feel free to pick a convenient briefing time here:
+${topmateUrl}
+
+Best regards,
+
+Suraj Jaiswal
+Founder, The Digital Frog | Medical AI & Patient Growth Engine
+Calendar: ${topmateUrl}
+Email: hello@surajjaiswal.com`;
+
+  await openSmartEmailComposer(lead.email, subject, body, lead.business_name, lead.id, 'scorecard');
+}
+
+async function triggerScorecardEmailActionById(leadId) {
+  const lead = allScorecardLeads.find(l => l.id === leadId);
+  if (!lead) return;
+  activeScorecardLead = lead;
+  await triggerScorecardEmailAction();
+}
+
+async function triggerMapsEmailAction() {
+  if (!activeMapsPitchLead) return;
+  const lead = activeMapsPitchLead;
+  const curVer = window.currentPitchVersion || 'v1';
+  const currentPitch = window.currentLeadPitches?.[curVer] || window.currentLeadPitches?.v1 || {};
+  const cleanMail = extractCleanEmailPitch(lead, currentPitch.email || lead.ai_email_pitch || '');
+
+  const subject = cleanMail.subject || `Growth inquiry for ${lead.business_name}`;
+  const body = cleanMail.body || lead.ai_email_pitch || '';
+
+  await openSmartEmailComposer(lead.email, subject, body, lead.business_name, lead.id, 'maps');
+}
+
+async function triggerLeadEmailClick(leadId) {
+  const lead = allMapsLeads.find(l => l.id === leadId);
+  if (!lead) return;
+  const cleanMail = extractCleanEmailPitch(lead);
+  const subject = cleanMail.subject || `Growth inquiry for ${lead.business_name}`;
+  const body = cleanMail.body || lead.ai_email_pitch || '';
+
+  await openSmartEmailComposer(lead.email, subject, body, lead.business_name, lead.id, 'maps');
 }
 
 async function updateScorecardLeadStatus(leadId, status) {

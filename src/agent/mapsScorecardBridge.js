@@ -1,5 +1,6 @@
 import { ScorecardEngine, detectNiche, NICHE_REGISTRY } from './scorecardEngine.js';
 import { ScorecardLeadModel, GoogleMapsLeadModel, db } from '../db/database.js';
+import { ScorecardPdfGenerator } from './pdfGenerator.js';
 
 const PUBLIC_URL = process.env.PUBLIC_URL || 'https://crm.thedigitalfrog.com';
 const TOPMATE_URL = process.env.TOPMATE_URL || 'https://topmate.io/isurajjaiswal';
@@ -107,11 +108,35 @@ export class MapsScorecardBridge {
           has_socials: hasInstagram || hasFacebook || hasYouTube,
           maps_url: lead.maps_url
         },
-        prescription_text: rxResult.reportText,
+        prescription_text: rxResult.prescriptionText,
         prescription_data: rxResult,
         status: 'new',
         notes: `Auto-generated from Google Maps Hunter (Rating: ${rating}⭐, ${reviewsCount} reviews)`
       });
+
+      // Asynchronously ensure PDF exists
+      if (scorecardId) {
+        ScorecardPdfGenerator.generatePrescriptionPdf({
+          leadId: scorecardId,
+          businessName: lead.business_name,
+          contactPerson,
+          businessType: lead.category || niche.label,
+          city: lead.city || 'your area',
+          scores,
+          prescriptionText: rxResult.prescriptionText,
+          prescriptionData: rxResult,
+          topmateUrl: TOPMATE_URL,
+          agencyName: AGENCY_NAME,
+          founderName: FOUNDER_NAME,
+          email: lead.email
+        }).then(pdfRes => {
+          if (pdfRes && pdfRes.filePath) {
+            ScorecardLeadModel.updatePdf(scorecardId, pdfRes.filePath, pdfRes.publicUrl);
+          }
+        }).catch(err => {
+          console.warn('[MapsScorecardBridge] Async PDF generation note:', err.message);
+        });
+      }
     } catch (scErr) {
       console.warn('[MapsScorecardBridge] Scorecard record warning:', scErr.message);
     }
@@ -199,7 +224,7 @@ Email: hello@surajjaiswal.com`;
           id: lead.id,
           ai_email_pitch: result.cleanEmailPitch,
           ai_whatsapp_pitch: result.cleanWhatsappPitch,
-          doctor_prescription: result.cleanEmailPitch, // Store the clean email pitch instead of raw JSON!
+          doctor_prescription: result.rxResult ? result.rxResult.prescriptionText : result.cleanEmailPitch,
           opportunity_summary: `Scorecard #${result.scorecardId || 'ready'}: Overall ${result.overallScore}/100. Video: ${result.scores.videoScore}/100. Audit URL: ${result.publicScorecardUrl}`
         });
         updatedCount++;

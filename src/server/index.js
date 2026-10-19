@@ -576,6 +576,7 @@ app.post('/api/leads/:id/generate-dm', requireAuth, async (req, res) => {
     
     const settings = SettingsModel.getAll();
     const newDM = await reasoner.synthesizeDM(lead, [], settings.niche_target);
+    LeadModel.updateDM(lead.id, newDM);
     res.json({ success: true, dm: newDM, lead_id: lead.id });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1350,24 +1351,84 @@ app.post('/api/scorecard/submit', publicApiRateLimiter.middleware(), async (req,
   }
 });
 
-// Download/View Generated Prescription PDF for a lead
-app.get('/api/scorecard/leads/:id/pdf', (req, res) => {
+// Download/View Generated Prescription PDF for a lead (Auto-generates if missing!)
+app.get('/api/scorecard/leads/:id/pdf', async (req, res) => {
   try {
-    const lead = ScorecardLeadModel.getById(req.params.id);
-    if (!lead || !lead.pdf_path) {
-      return res.status(404).json({ error: 'PDF not found for this lead.' });
+    let lead = ScorecardLeadModel.getById(req.params.id);
+    if (!lead) {
+      return res.status(404).json({ error: 'Lead not found.' });
     }
+
     const safePdfBase = path.resolve('public', 'prescriptions');
-    const resolvedPath = path.resolve(lead.pdf_path);
+    let resolvedPath = lead.pdf_path ? path.resolve(lead.pdf_path) : null;
+
+    // If PDF is not yet generated or missing on disk, generate it dynamically!
+    if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+      console.log(`[ScorecardPDF] Auto-generating missing PDF on-demand for lead #${lead.id} (${lead.business_name})...`);
+      
+      let answers = {};
+      try {
+        answers = typeof lead.answers === 'string' ? JSON.parse(lead.answers) : (lead.answers || {});
+      } catch (_) {}
+
+      const scores = {
+        overallScore: lead.overall_score || 45,
+        videoScore: lead.video_score || 25,
+        discoveryScore: lead.discovery_score || 45,
+        conversionScore: lead.conversion_score || 55,
+        grade: (lead.overall_score >= 80 ? 'A' : lead.overall_score >= 65 ? 'B' : lead.overall_score >= 45 ? 'C' : 'D'),
+        statusSummary: (lead.overall_score || 45) < 50 ? 'Critical Video Growth Deficiency' : 'High Patient Growth Potential'
+      };
+
+      const topmateUrl = process.env.TOPMATE_URL || 'https://topmate.io/isurajjaiswal';
+      const agencyName = 'The Digital Frog';
+      const founderName = 'Suraj Jaiswal';
+
+      const rxResult = ScorecardEngine.generatePrescription({
+        businessName: lead.business_name,
+        contactPerson: lead.contact_person,
+        businessType: lead.business_type,
+        city: lead.city,
+        consultationFee: lead.consultation_fee,
+        workTiming: lead.work_timing,
+        scores,
+        answers,
+        topmateUrl,
+        agencyName,
+        founderName
+      });
+
+      const pdfRes = await ScorecardPdfGenerator.generatePrescriptionPdf({
+        leadId: lead.id,
+        businessName: lead.business_name,
+        contactPerson: lead.contact_person,
+        businessType: lead.business_type,
+        city: lead.city,
+        consultationFee: lead.consultation_fee,
+        workTiming: lead.work_timing,
+        scores,
+        prescriptionText: rxResult.prescriptionText,
+        prescriptionData: rxResult,
+        topmateUrl,
+        agencyName,
+        founderName,
+        email: lead.email
+      });
+
+      ScorecardLeadModel.updatePdf(lead.id, pdfRes.filePath, pdfRes.publicUrl);
+      db.prepare('UPDATE scorecard_leads SET prescription_text = ?, prescription_data = ? WHERE id = ?')
+        .run(rxResult.prescriptionText, JSON.stringify(rxResult), lead.id);
+
+      resolvedPath = path.resolve(pdfRes.filePath);
+    }
+
     if (!isPathSafe(safePdfBase, resolvedPath)) {
       return res.status(403).json({ error: 'Access denied: Invalid file location.' });
-    }
-    if (!fs.existsSync(resolvedPath)) {
-      return res.status(404).json({ error: 'PDF file not found on disk.' });
     }
     const downloadName = path.basename(resolvedPath);
     res.download(resolvedPath, downloadName);
   } catch (err) {
+    console.error('[ScorecardPDF] Error serving PDF:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1397,6 +1458,32 @@ app.post('/api/scorecard/leads/:id/status', requireAuth, (req, res) => {
   const { status } = req.body;
   try {
     ScorecardLeadModel.updateStatus(req.params.id, status);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update Scorecard Lead Email
+app.post('/api/scorecard/leads/:id/email', requireAuth, (req, res) => {
+  const { email } = req.body;
+  try {
+    if (email && email.trim()) {
+      db.prepare('UPDATE scorecard_leads SET email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(email.trim(), req.params.id);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update Google Maps Lead Email
+app.post('/api/maps/leads/:id/email', requireAuth, (req, res) => {
+  const { email } = req.body;
+  try {
+    if (email && email.trim()) {
+      db.prepare('UPDATE google_maps_leads SET email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(email.trim(), req.params.id);
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

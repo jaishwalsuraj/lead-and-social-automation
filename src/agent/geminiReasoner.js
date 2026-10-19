@@ -65,8 +65,7 @@ export class GeminiReasoner {
       }
     }
 
-    const firstName = lead.author_name ? lead.author_name.split(' ')[0] : 'there';
-    return `Hey ${firstName}, saw your post on ${lead.platform}! We help brands streamline ${cleanNiche}. Happy to share a quick checklist or blueprint if you're exploring options—no pitch, just glad to help!`;
+    return this._heuristicDMGen(lead, cleanNiche);
   }
 
   /**
@@ -259,32 +258,32 @@ Rules:
 
   async _callGeminiCommentGen(postText, authorName, evaluation, cleanNiche, apiKey, angle = null) {
     const angleGuidance = angle === 'hook'
-      ? 'Focus angle: Strong pattern-interrupt hook contrasting conventional approaches vs what actually works.'
+      ? 'Focus angle: Contrarian pattern-interrupt hook contrasting conventional industry myths vs what actually converts.'
       : angle === 'insight'
-      ? 'Focus angle: Specific tactical setup, metric, or framework insight.'
+      ? 'Focus angle: Specific tactical setup, benchmark metric, or diagnostic framework insight.'
       : angle === 'offer'
-      ? 'Focus angle: Warm, zero-pressure offer to share our test blueprint or checklist.'
-      : 'Focus angle: Sharp, natural peer practitioner value drop.';
+      ? 'Focus angle: Zero-pressure peer offer to share our private diagnostic breakdown or test protocol.'
+      : 'Focus angle: High-signal peer practitioner value drop with an immediate pattern break.';
 
-    const prompt = `You are an elite practitioner and specialist in ${cleanNiche}.
-A prospective buyer/client posted on social media:
+    const prompt = `You are Suraj Jaiswal, an elite digital growth architect, AI video authority specialist, and conversion systems engineer at The Digital Frog.
+A prospective client/founder posted this on social media:
 """
 ${postText}
 """
-Author: ${authorName}
-Context / Identified Need: ${evaluation.reason || evaluation.pain_point || 'seeking solution'}
+Author: ${authorName || 'there'}
+Context / Identified Need: ${evaluation.reason || evaluation.pain_point || 'seeking growth solution'}
 ${angleGuidance}
 
 Task:
-Write a SHORT, ATTRACTIVE comment reply for this post.
+Write a SHORT, ULTRA-HIGH-CONVERTING comment reply for this post.
 
-STRICT REQUIREMENTS:
-1. LENGTH: Exactly 1 to 2 sentences (strictly MAXIMUM 25 to 35 words). Shorter is better!
-2. VALUE DROP: Immediately share 1 sharp, high-signal practitioner insight or tactical best practice that directly addresses their specific question, requirement, or budget.
-3. ATTRACTIVE & PEER-TO-PEER: Make it punchy, engaging, and authoritative so that both the author AND anyone reading the thread think "this person really knows their stuff".
-4. NO FLUFF / NO SALES PITCH: Never say "DM me", "hire us", "we are an agency", or "check out our website". No hashtags.
-5. CLOSING: Conclude with a warm, zero-friction peer invite (e.g., "Happy to share our test framework!" or "Glad to drop our checklist if helpful!").
-6. OUTPUT: Return ONLY the exact comment text. No surrounding quotes or preamble.`;
+STRICT VIRAL HOOK & EXPERTISE GUIDELINES:
+1. VIRAL PATTERN BREAK HOOK (MANDATORY): Never start with greetings, compliments, or generic filler ("Great post!", "Nice thoughts!"). The very first 3-7 words must break their scrolling pattern with a contrarian, intriguing observation directly addressing their post (e.g. "Counter-intuitive reality with [topic]:", "90% of brands burn cash here because...", "The actual bottleneck isn't [X], it's...").
+2. DEMONSTRATE ELITE EXPERTISE: Showcase proven practitioner mastery in digital acquisition funnels, AI avatar video authority, high-ticket qualification, or speed-to-lead automation. Reference tactical levers, real-world benchmarks, or systems.
+3. ACCORDING TO THE EXACT POST: Directly reference or quote the specific problem, tool, metric, or question in their post so it feels 100% bespoke.
+4. LENGTH: Exactly 1 to 2 punchy sentences (maximum 25 to 35 words). Shorter and sharper is better!
+5. ZERO PUSHINESS / NO HARD SELL: Never say "DM me", "hire us", "check my profile", or drop links. Conclude with a warm, zero-friction peer invite (e.g., "Glad to drop our diagnostic framework if helpful!" or "Happy to share what converted best!").
+6. OUTPUT: Return ONLY the exact comment text. No quotes, no hashtags, no preamble.`;
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
@@ -307,25 +306,33 @@ STRICT REQUIREMENTS:
   }
 
   async _callGeminiDMGen(lead, history, cleanNiche, apiKey) {
-    const prompt = `You are reaching out 1-on-1 to a prospective client on social media.
-Lead post: "${lead.post_text}"
-Author: ${lead.author_name}
-Target Domain: ${cleanNiche}
+    const prompt = `You are Suraj Jaiswal, Founder of The Digital Frog, an elite digital growth and AI automation strategist.
+You are reaching out 1-on-1 via direct message (DM) on ${lead.platform || 'social media'} to this prospect who posted:
+"""
+${lead.post_text}
+"""
+Author / Handle: ${lead.author_name || lead.author_handle || 'there'}
+Niche / Focus: ${cleanNiche}
 
 Task:
-Write a short, friendly, personalized direct message (DM).
-Rules:
-- Strictly under 40-50 words (2-3 short sentences).
-- Reference their specific post context naturally.
-- Offer a concrete, helpful asset (e.g. quick checklist, test structure, or workflow).
-- Zero pushiness, zero aggressive sales talk.
-- Return ONLY the message text.`;
+Write a SHORT, HIGH-CONVERTING 1-on-1 Direct Message (strictly 30 to 45 words, 2-3 short sentences).
+
+STRICT VIRAL HOOK & PATTERN BREAK RULES:
+1. VIRAL PATTERN BREAK HOOK: Do NOT start with "Hey, saw your post", "Hope you are doing well", or standard sales pitches. Start immediately with an intriguing, pattern-breaking observation directly analyzing what they posted (e.g., "Saw your point on [specific detail from post] — 90% of people try to solve this with [common mistake], but the actual bottleneck is usually [insight]...").
+2. DEMONSTRATE PRACTICAL EXPERTISE: State a specific metric or micro-framework from real experience (e.g., "When we audited similar setups, switching to [strategy] cut CAC by 35% and doubled conversion without extra ad spend").
+3. VALUE-FIRST OFFER: Conclude with a zero-friction peer invitation (e.g., "Put together a private 2-min diagnostic breakdown / scorecard on how to patch this — happy to share the direct link if you'd like to inspect it?").
+4. ZERO HARDSALE: No calendar links, no pricing, no aggressive pushiness.
+5. OUTPUT: Return ONLY the exact message text. No surrounding quotes.`;
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.35,
+          maxOutputTokens: 140
+        }
       })
     });
 
@@ -468,11 +475,11 @@ Return strictly valid JSON:
 
     // 1. Meta / Facebook Ads & Paid Social
     if (text.includes('meta ad') || text.includes('facebook ad') || text.includes('fb ad') || text.includes('media buyer') || text.includes('performance market') || text.includes('run ad') || text.includes('ad expert')) {
-      const budgetPrefix = budget ? `At a ${budget} budget on Meta` : 'On Meta right now';
+      const budgetPrefix = budget ? `At ${budget} on Meta` : 'Counter-intuitive reality with Meta ads';
       const templates = [
-        `${budgetPrefix}, rapid creative testing with broad targeting consistently outperforms tight interest stacks. Handled similar ad scale recently—happy to drop our test structure!`,
-        `For Meta acquisition, testing 3 distinct video hooks in week 1 gives you the fastest CPA validation. Dropped a quick note with our current testing framework!`,
-        `With Meta ads, dialing in high-retention creative angles and proper CAPI tracking does 90% of the heavy lifting. Glad to share what's converting best!`
+        `${budgetPrefix}: 80% of ad spend is burnt testing micro-audiences when the actual bottleneck is week-1 video hook fatigue. Glad to drop our rapid creative testing setup if helpful!`,
+        `The biggest ROAS killer right now isn't targeting—it's having zero polarized hooks in the first 2 seconds. Tested this across similar accounts and happy to share what won!`,
+        `With Meta acquisition, dialing in 3 distinct hook variations paired with CAPI conversion tracking does 90% of the heavy lifting. Glad to share our current roadmap!`
       ];
       return pickTemplate(templates);
     }
@@ -480,9 +487,9 @@ Return strictly valid JSON:
     // 2. Google Ads & PPC
     if (text.includes('google ad') || text.includes('ppc') || text.includes('adwords') || text.includes('search ad')) {
       const templates = [
-        `For Google Ads, phrase match paired with tight negative keyword lists usually cuts wasted spend by 40% in week one. Happy to share our audit checklist!`,
-        `High-intent search terms with dedicated landing pages give you the quickest ROAS. Handled similar campaigns recently—glad to share our structure!`,
-        `Structuring granular negative lists before scaling spend protects 30%+ of ad budget. Happy to share our Google Ads launch checklist!`
+        `Counter-intuitive fact on Google PPC: broad match without strict negative keyword clusters leaks 40%+ of your budget in 7 days. Happy to share our negative term checklist!`,
+        `Most PPC campaigns fail on the post-click journey, not the bidding strategy. Pairing exact intent search with dedicated speed-optimized landers 2x'd our conversion recently!`,
+        `The quickest ROAS unlock is auditing search term leakage before raising daily budget. Glad to drop our PPC audit framework if exploring options!`
       ];
       return pickTemplate(templates);
     }
@@ -490,31 +497,31 @@ Return strictly valid JSON:
     // 3. SEO, AEO, GEO & AI Search
     if (text.includes('seo') || text.includes('aeo') || text.includes('geo') || text.includes('rank') || text.includes('chatgpt') || text.includes('ai search')) {
       const templates = [
-        `For AI search & GEO ranking, structuring your entity schema and authoritative niche citations moves the needle fastest. Happy to share a quick checklist!`,
-        `The quickest SEO win right now is structuring high-intent topic clusters with clean technical schema. Glad to share our current roadmap!`,
-        `Ranking in AI overviews requires authoritative structured entity proof and direct question answers. Happy to share our optimization guide!`
+        `Most brands overlook this in AI search: ranking on ChatGPT & Perplexity requires authoritative entity schema, not keyword density. Glad to share our GEO optimization roadmap!`,
+        `Counter-intuitive SEO shift: Google's AI Overviews prioritize direct question-answer clusters over long-form fluff. Happy to drop our entity structuring checklist!`,
+        `The fastest rank lift in 2026 comes from aligning structured schema with verified local Google citations. Glad to share our agency setup guide!`
       ];
       return pickTemplate(templates);
     }
 
     // 4. E-commerce / Shopify / Online Store / WooCommerce
     if (text.includes('shopify') || text.includes('ecommerce') || text.includes('e-commerce') || text.includes('store') || text.includes('woocommerce') || text.includes('cart') || text.includes('checkout') || text.includes('d2c') || text.includes('dtc')) {
-      const budgetPrefix = budget ? `For an online store under ${budget}` : 'For online store growth';
+      const budgetPrefix = budget ? `At ${budget} scale` : 'The silent conversion killer for online stores';
       const templates = [
-        `${budgetPrefix}, a clean lightweight setup with zero checkout friction gives you the fastest launch. Happy to share our starter tech stack!`,
-        `Keeping checkout friction near zero and page load under 1.5s drives the fastest conversion lift. Glad to share our starter architecture!`,
-        `Triggering automated recovery flows within 15 mins usually recaptures 18-24% of abandoned buyers without heavy discounts. Happy to share the blueprint!`
+        `${budgetPrefix}: every 500ms of mobile load delay slashes checkout completion by 18%. Keeping checkout friction near zero beats running discounts every time!`,
+        `Most e-commerce founders obsess over ad ROAS while losing 60% of buyers at checkout. Triggering 15-min automated recovery flows recaptures 20%+ of browse drop-offs!`,
+        `Counter-intuitive truth: clean 1-click checkout flow and instant mobile trust badges drive 3x more revenue than adding another ad channel. Happy to share our starter stack!`
       ];
       return pickTemplate(templates);
     }
 
     // 5. Reels, Content, Social Media Management & Branding
     if (text.includes('reel') || text.includes('content') || text.includes('video') || text.includes('social media') || text.includes('instagram') || text.includes('branding') || text.includes('logo')) {
-      const budgetPrefix = budget ? `At ${budget}` : 'For organic growth';
+      const budgetPrefix = budget ? `At ${budget}` : 'Pattern break for organic reels';
       const templates = [
-        `The 3-second hook and high-retention pacing make or break organic reels right now. Scaled similar accounts recently—glad to share our hook structure!`,
-        `${budgetPrefix}, consistency plus 3 distinct content angles per week is what really compounds reach. Happy to share our batching workflow!`,
-        `Focusing on clean visual identity and strong initial contrast gives the sharpest brand perception. Glad to share a few recent references!`
+        `${budgetPrefix}: the first 1.5 seconds dictate 80% of retention. Testing 3 polarized hooks consistently beats high-budget production. Scaled similar accounts—happy to share our hook formula!`,
+        `The biggest mistake creators make is waiting 5 seconds to deliver the payoff. Fast visual cuts + pattern interrupt in frame 1 is what compounds reach. Glad to share our batching workflow!`,
+        `Visual contrast and contrarian hooks in the opening frame 2x watch time instantly. Glad to drop our high-retention reel script structure!`
       ];
       return pickTemplate(templates);
     }
@@ -522,31 +529,54 @@ Return strictly valid JSON:
     // 6. Lead Generation, B2B & Funnels
     if (text.includes('lead') || text.includes('b2b') || text.includes('funnel') || text.includes('cold email') || text.includes('client')) {
       const templates = [
-        `The biggest lever for lead funnels is qualifying intent right before the booking step to keep lead quality high. Glad to share our funnel framework!`,
-        `Streamlining the qualification trigger can easily 2x your booked calls without extra spend. Happy to share our automated workflow!`,
-        `Automated lead qualification before routing to calendar prevents 80% of no-shows. Glad to share our high-ticket funnel architecture!`
+        `The hidden bottleneck in high-ticket lead generation is speed-to-lead: inquiries unanswered in 15 minutes drop conversion by 70%. Automated instant routing 2x'd our booked calls!`,
+        `Counter-intuitive finding: qualifying intent on the booking page weeds out tire-kickers while actually increasing show-up rates to 85%+. Happy to drop our qualification framework!`,
+        `Most B2B funnels leak at the handoff between discovery and calendar booking. Streamlining the intake funnel saves 10+ hours a week. Glad to share our automated blueprint!`
       ];
       return pickTemplate(templates);
     }
 
     // 7. Developer, Website, App & Tech
     if (text.includes('developer') || text.includes('website') || text.includes('app') || text.includes('saas') || text.includes('build') || text.includes('software')) {
-      const budgetPrefix = budget ? `At ${budget}` : 'For custom builds';
+      const budgetPrefix = budget ? `For builds under ${budget}` : 'Decoupled system architecture';
       const templates = [
-        `${budgetPrefix}, keeping the initial build focused strictly on core user flow saves weeks of scope creep. Glad to share how we structure it!`,
-        `Building with modular components and clean API integrations makes future scaling seamless. Happy to share our starter stack!`,
-        `Decoupled architectures with standard webhooks prevent 90% of technical debt down the road. Glad to share our setup guide!`
+        `${budgetPrefix}: keeping the core MVP strictly focused on the primary conversion event prevents 90% of scope creep. Glad to share how we architect lightweight stacks!`,
+        `Counter-intuitive truth on custom builds: standard webhook events and modular micro-components save months of technical debt down the road. Happy to share our boilerplate!`,
+        `Building with clean API separation and lightweight frontends cuts maintenance overhead by half. Glad to share our production architecture checklist!`
       ];
       return pickTemplate(templates);
     }
 
     // 8. General High-Converting Short Peer Comments
     const genericTemplates = [
-      `Solid point! Keeping the core workflow streamlined and decoupled avoids 90% of downstream bottlenecks. Happy to share our breakdown if you're exploring options!`,
-      `Great initiative! Focusing on the primary high-leverage friction point first delivers the fastest ROI. Glad to share what worked best for us!`,
-      `Most people overlook this exact leverage point. Simple, direct execution consistently beats over-complicated setups. Happy to drop our checklist!`
+      `Counter-intuitive perspective on this: 90% of operators burn resources over-engineering the periphery when fixing the single high-friction bottleneck delivers 3x ROI immediately. Happy to drop our diagnostic framework!`,
+      `Most people overlook this exact leverage point. Simple, automated execution paired with fast customer feedback consistently beats complex setups. Glad to share what worked best!`,
+      `Pattern break: the real unlock here isn't doing more tasks, it's removing the manual handoff that causes 80% of the delays. Happy to share our operational checklist!`
     ];
     return pickTemplate(genericTemplates);
+  }
+
+  _heuristicDMGen(lead, cleanNiche) {
+    const text = (lead.post_text || '').toLowerCase();
+    const handle = lead.author_handle || (lead.author_name ? lead.author_name.split(' ')[0] : 'there');
+
+    if (text.includes('ad') || text.includes('meta') || text.includes('ppc') || text.includes('marketing')) {
+      return `Saw your note on paid acquisition, ${handle} — 90% of brands burn cash tweaking audience interests, but the actual bottleneck is almost always week-1 video hook fatigue. When we tested 3 polarized hooks, CAC dropped 35%. Put together a 2-min breakdown on how this works—happy to share if you want to inspect it?`;
+    }
+
+    if (text.includes('reel') || text.includes('video') || text.includes('content') || text.includes('instagram')) {
+      return `Saw your point on content and video reach, ${handle} — counter-intuitive reality is that the first 1.5 seconds dictate 80% of retention. Tested high-contrast visual pattern breaks recently and watch time doubled without expensive filming. Happy to drop our hook structure if you'd like to eyeball it?`;
+    }
+
+    if (text.includes('lead') || text.includes('client') || text.includes('sales') || text.includes('growth')) {
+      return `Saw what you shared regarding client acquisition, ${handle} — the hidden leak in 90% of pipelines is speed-to-lead (inquiries unanswered in 15 mins convert 70% lower). We automated instant qualification and booked calls doubled. Put together a quick diagnostic roadmap on this—glad to send the link if helpful?`;
+    }
+
+    if (text.includes('website') || text.includes('shopify') || text.includes('store') || text.includes('ecommerce')) {
+      return `Saw your post on storefront conversions, ${handle} — counter-intuitive finding is that 500ms of checkout friction loses 20%+ of high-intent buyers before they even reach payment. Audited similar flows recently and happy to share our 1-page checkout optimization checklist!`;
+    }
+
+    return `Saw your observation on ${cleanNiche}, ${handle} — counter-intuitive truth is that 90% of operators over-complicate this setup when fixing the single core qualification bottleneck unlocks 2x ROI. Put together a 2-minute diagnostic audit on this—happy to share the private link if you'd like to check it out?`;
   }
 
   _heuristicContentGen(platform, topic, niche) {
