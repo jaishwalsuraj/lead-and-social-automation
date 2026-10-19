@@ -2095,7 +2095,10 @@ function applyCommentAngle(angle) {
 }
 
 function closeModal() {
-  document.getElementById('action-modal').classList.remove('open');
+  const modal = document.getElementById('action-modal');
+  if (modal) modal.classList.remove('open');
+  const errBox = document.getElementById('modal-action-error');
+  if (errBox) errBox.style.display = 'none';
   currentActionLeadId = null;
 }
 
@@ -2105,6 +2108,9 @@ async function submitModalAction() {
   const targetLead = allLeads.find(l => l.id === currentActionLeadId);
   const textVal = document.getElementById('modal-text').value;
   const submitBtn = document.getElementById('modal-submit-btn');
+  const errBox = document.getElementById('modal-action-error');
+  if (errBox) errBox.style.display = 'none';
+
   submitBtn.disabled = true;
   submitBtn.innerText = 'Executing via Browser...';
 
@@ -2122,17 +2128,70 @@ async function submitModalAction() {
     if (result.success) {
       const targetUrl = result.post_url || targetLead?.post_url || 'Target Post';
       appendTerminalLog(`Successfully executed ${currentActionMode} directly on: ${targetUrl}`, 'text-emerald');
+      showLeadNotificationToast(`✅ Action Executed`, `Comment posted successfully on ${targetLead?.platform.toUpperCase() || 'post'}.`);
       closeModal();
       loadLeads();
       loadStats();
     } else {
-      alert(`Action failed: ${result.error || result.reason}`);
+      const rawError = result.error || result.reason || 'Action could not be completed';
+      appendTerminalLog(`Action error on Lead #${currentActionLeadId}: ${rawError}`, 'text-danger');
+
+      // Instead of raw alert, display rich in-modal recovery card with direct link
+      const errMsgEl = document.getElementById('modal-action-error-msg');
+      const openLink = document.getElementById('modal-error-open-link');
+
+      let userFriendlyReason = rawError;
+      if (rawError.includes('Timeout') || rawError.includes('waitForSelector')) {
+        userFriendlyReason = `The comment box was collapsed or required manual interaction on this ${targetLead?.platform || 'social'} post. You can open the post in a new tab to comment directly.`;
+      } else if (rawError.includes('login') || rawError.includes('session')) {
+        userFriendlyReason = `Active ${targetLead?.platform || 'platform'} login required in Chrome (:9222). Please ensure you are logged into ${targetLead?.platform || 'social platform'} in your Chrome browser.`;
+      }
+
+      if (errBox && errMsgEl) {
+        errMsgEl.innerText = userFriendlyReason;
+        if (openLink && targetLead?.post_url) {
+          openLink.href = targetLead.post_url;
+        }
+        errBox.style.display = 'block';
+      } else {
+        alert(`Action Note: ${userFriendlyReason}`);
+      }
     }
   } catch (err) {
-    alert(`Error: ${err.message}`);
+    console.error('Modal action error:', err);
+    const errBox = document.getElementById('modal-action-error');
+    const errMsgEl = document.getElementById('modal-action-error-msg');
+    if (errBox && errMsgEl) {
+      errMsgEl.innerText = `Network/server error: ${err.message}`;
+      errBox.style.display = 'block';
+    } else {
+      alert(`Error: ${err.message}`);
+    }
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerText = 'Send Now via Browser';
+  }
+}
+
+async function copyModalCommentAndAlert() {
+  const textVal = document.getElementById('modal-text')?.value;
+  if (!textVal) return;
+  const copied = await copyToClipboard(textVal);
+  if (copied) {
+    showLeadNotificationToast('📋 Comment Copied', 'Paste directly into the post comment box (Ctrl+V / Cmd+V).');
+  }
+}
+
+async function markCurrentLeadManuallyEngaged() {
+  if (!currentActionLeadId) return;
+  try {
+    await markLeadStatus(currentActionLeadId, 'engaged');
+    showLeadNotificationToast('✓ Marked as Engaged', `Lead #${currentActionLeadId} moved to Engaged stage.`);
+    closeModal();
+    loadLeads();
+    loadStats();
+  } catch (err) {
+    console.error('Mark engaged error:', err);
   }
 }
 

@@ -42,9 +42,45 @@ export class FacebookAdapter {
           const feedUnits = Array.from(document.querySelectorAll('div[role="feed"] > div, div[role="article"]'));
 
           for (const unit of feedUnits) {
-            // Find post link
-            const linkEl = unit.querySelector('a[href*="/posts/"], a[href*="/permalink/"], a[href*="story_fbid"]');
-            const postUrl = linkEl ? linkEl.href.split('?')[0] : window.location.href + '#' + Math.random().toString(36).substring(7);
+            // Find true post permalink
+            let postUrl = null;
+            const linkCandidates = Array.from(unit.querySelectorAll('a[href]'));
+            for (const a of linkCandidates) {
+              const href = a.href || '';
+              if (
+                href.includes('/posts/') ||
+                href.includes('/permalink/') ||
+                href.includes('story_fbid=') ||
+                href.includes('/videos/') ||
+                href.includes('/reel/') ||
+                href.includes('/photos/')
+              ) {
+                if (href.includes('story_fbid=')) {
+                  try {
+                    const u = new URL(href);
+                    postUrl = `${u.origin}${u.pathname}?story_fbid=${u.searchParams.get('story_fbid')}&id=${u.searchParams.get('id') || ''}`;
+                  } catch {
+                    postUrl = href;
+                  }
+                } else {
+                  postUrl = href.split('?')[0];
+                }
+                break;
+              }
+            }
+
+            // Check timestamp link which usually points directly to the post permalink
+            if (!postUrl) {
+              const timeLink = unit.querySelector('span > a[role="link"][href*="facebook.com"], a[aria-label*="ago" i], a[aria-label*="yesterday" i], a[aria-label*="hr" i], a[aria-label*="min" i]');
+              if (timeLink && timeLink.href && !timeLink.href.includes('/search/')) {
+                postUrl = timeLink.href.split('?')[0];
+              }
+            }
+
+            // Fallback to page URL with author hash if permalink not extracted
+            if (!postUrl) {
+              postUrl = window.location.href + '#' + Math.random().toString(36).substring(7);
+            }
 
             // Find post message content
             const messageEl = unit.querySelector('div[dir="auto"], div[data-ad-preview="message"]');
@@ -132,7 +168,8 @@ export class FacebookAdapter {
   }
 
   /**
-   * Comments on a Facebook post
+   * Comments on a Facebook post with robust handling for Lexical editor,
+   * collapsed comment boxes, cookie overlays, and login detection.
    */
   async commentOnPost(postUrl, commentText) {
     const quota = QuotaModel.getToday(this.platform);
@@ -156,27 +193,131 @@ export class FacebookAdapter {
 
     try {
       LogModel.add(this.platform, 'comment_attempt', `Commenting on Facebook post: ${postUrl}`);
-      await page.goto(postUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
+
+      // Strip hash fragments if it was a search URL fallback
+      const cleanUrl = postUrl.split('#')[0];
+      await page.goto(cleanUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
       await browserManager.humanDelay(3000, 5000);
 
-      // Find comment input
-      const commentInput = 'div[aria-label*="Write a comment"], div[role="textbox"][contenteditable="true"]';
-      await page.waitForSelector(commentInput, { timeout: 10000 });
-      await browserManager.humanType(page, commentInput, commentText);
+      // 1. Dismiss Facebook cookie banners or overlays
+      try {
+        const cookieBtn = await page.$('button[data-cookiebanner="accept_button"], button:has-text("Allow all cookies"), button:has-text("Decline optional cookies"), div[aria-label="Decline optional cookies"]');
+        if (cookieBtn) {
+          await cookieBtn.click().catch(() => {});
+          await browserManager.humanDelay(800, 1500);
+        }
+      } catch (_) {}
+
+      // Press Escape to dismiss any popups
+      await page.keyboard.press('Escape').catch(() => {});
+      await browserManager.humanDelay(500, 1000);
+
+      // 2. Check if Facebook requires login
+      const isLoggedOut = await page.evaluate(() => {
+        return !!(document.querySelector('input[name="email"]') && document.querySelector('input[name="pass"]')) ||
+               window.location.pathname.startsWith('/login');
+      });
+      if (isLoggedOut) {
+        throw new Error('Facebook requires an active login session in Chrome. Please open Facebook in Chrome (:9222) and sign in.');
+      }
+
+      // 3. Scroll down slightly to trigger lazy-loading of interactions
+      await page.evaluate(() => window.scrollBy(0, 350));
       await browserManager.humanDelay(1500, 2500);
 
-      // Submit via Enter key
+      // 4. Locate comment input trigger or contenteditable box
+      const inputSelectors = [
+        'div[data-lexical-editor="true"][role="textbox"]',
+        'div[aria-label*="Write a comment" i]',
+        'div[aria-label*="Write an answer" i]',
+        'div[aria-label*="Write a public comment" i]',
+        'div[aria-label*="Comment as" i]',
+        'div[role="textbox"][contenteditable="true"]',
+        'form div[role="textbox"][contenteditable="true"]',
+        'div[contenteditable="true"][role="textbox"]',
+        'form [contenteditable="true"]',
+        'textarea[placeholder*="comment" i]'
+      ];
+
+      let targetInput = null;
+      for (const sel of inputSelectors) {
+        const el = await page.$(sel);
+        if (el && await el.isVisible()) {
+          targetInput = el;
+          break;
+        }
+      }
+
+      // 5. If comment box is collapsed, click the "Comment" button trigger
+      if (!targetInput) {
+        console.log('[Facebook] Comment box not yet visible, clicking Comment button trigger...');
+        const commentButtonSelectors = [
+          'div[aria-label*="Leave a comment" i]',
+          'div[aria-label*="Comment" i][role="button"]',
+          'div[role="button"]:has-text("Comment")',
+          'span:has-text("Comment")',
+          'form [role="button"]:has-text("Comment")',
+          'div[role="article"] div[role="button"]:has-text("Comment")'
+        ];
+
+        for (const btnSel of commentButtonSelectors) {
+          const btn = await page.$(btnSel);
+          if (btn && await btn.isVisible()) {
+            await btn.scrollIntoViewIfNeeded().catch(() => {});
+            await btn.click().catch(() => {});
+            await browserManager.humanDelay(1500, 3000);
+            break;
+          }
+        }
+
+        // Re-check for input after trigger click
+        for (const sel of inputSelectors) {
+          const el = await page.$(sel);
+          if (el && await el.isVisible()) {
+            targetInput = el;
+            break;
+          }
+        }
+      }
+
+      // If still not found, try waiting briefly with state: 'visible'
+      if (!targetInput) {
+        const combinedSelector = inputSelectors.join(', ');
+        try {
+          targetInput = await page.waitForSelector(combinedSelector, { timeout: 8000, state: 'visible' });
+        } catch (_) {}
+      }
+
+      if (!targetInput) {
+        throw new Error('Facebook comment box is collapsed or restricted on this post. You can open the post directly in Chrome to comment.');
+      }
+
+      // 6. Focus & Type into the comment input
+      await targetInput.click().catch(() => {});
+      await browserManager.humanDelay(600, 1200);
+
+      await page.keyboard.type(commentText, { delay: 35 });
+      await browserManager.humanDelay(1500, 2500);
+
+      // 7. Submit via Enter key
       await page.keyboard.press('Enter');
-      await browserManager.humanDelay(3000, 5000);
+      await browserManager.humanDelay(2000, 3500);
+
+      // Check if send button needs to be clicked (e.g. blue arrow or "Post" button)
+      const sendButton = await page.$('div[aria-label*="Comment" i][role="button"], div[aria-label*="Post" i][role="button"], div[aria-label*="Send" i], svg[aria-label*="Send" i]');
+      if (sendButton && await sendButton.isVisible()) {
+        await sendButton.click().catch(() => {});
+        await browserManager.humanDelay(2000, 3500);
+      }
 
       QuotaModel.increment(this.platform, 'comments_count');
       LogModel.add(this.platform, 'comment_posted', `Comment posted on Facebook!`, { postUrl, commentText });
-      return { success: true };
+      return { success: true, post_url: postUrl };
     } catch (err) {
       LogModel.add(this.platform, 'comment_error', `Facebook comment failed: ${err.message}`);
-      return { success: false, error: err.message };
+      return { success: false, error: err.message, post_url: postUrl };
     } finally {
-      await page.close();
+      await page.close().catch(() => {});
     }
   }
 
