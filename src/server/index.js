@@ -59,7 +59,7 @@ wss.on('connection', (ws, req) => {
     ws.send(JSON.stringify({ 
       type: 'authenticated',
       auth_success: true,
-      message: 'Connected to Anti-Gravity Social Growth Hub (Authenticated)',
+      message: 'Connected to TDF Growth Hub (Authenticated)',
       tunnel: tunnelManager.getStatus(),
       user: authenticatedUser.username
     }));
@@ -1673,7 +1673,7 @@ process.on('unhandledRejection', (reason) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
-  console.log(`🚀 Anti-Gravity Social Growth Hub running at http://localhost:${PORT}`);
+  console.log(`🚀 TDF Growth Hub & Lead Outreach Engine running at http://localhost:${PORT}`);
   LogModel.add('system', 'server_online', `Control Center server started on port ${PORT}`);
 
   // Automatically start Cloudflare Live HTTPS Tunnel so client links work worldwide

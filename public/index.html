@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Anti-Gravity Social Growth & Lead Automation Engine</title>
+  <title>TDF Growth Hub & Lead Outreach Engine</title>
   <meta name="description" content="Autonomous browser-controlled multi-platform growth engine for Threads, Instagram, Facebook, and LinkedIn without APIs.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
-  <div class="app-container">
+  <div class="app-container" id="app-container" style="display: none !important;">
     <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="brand-header">
@@ -23,8 +23,8 @@
           </svg>
         </div>
         <div class="brand-text">
-          <h2>Anti-Gravity</h2>
-          <span class="badge-engine">Agentic Growth 2.0</span>
+          <h2>TDF Growth Hub</h2>
+          <span class="badge-engine">Lead Outreach Engine</span>
         </div>
       </div>
 
@@ -1482,9 +1482,14 @@
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" id="modal-submit-btn">Send Now via Browser</button>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="btn btn-outline" onclick="copyModalCommentAndAlert()" id="modal-footer-copy-btn">
+          <span>📋 Copy Text</span>
+        </button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" id="modal-submit-btn">Send Now via Browser</button>
+        </div>
       </div>
     </div>
   </div>
@@ -2033,12 +2038,12 @@
   </div>
 
   <!-- ==================== RESTRICTED ACCESS LOGIN MODAL OVERLAY ==================== -->
-  <div id="login-overlay" style="display: none;">
+  <div id="login-overlay" style="display: flex;">
     <div class="login-window-card">
       <div class="login-header">
         <div class="login-emblem">🐸</div>
         <h2 class="login-title">The Digital Frog</h2>
-        <p class="login-subtitle">Anti-Gravity Growth Hub & Lead Outreach Engine</p>
+        <p class="login-subtitle">TDF Growth Hub & Lead Outreach Engine</p>
       </div>
       <div class="login-body">
         <div class="login-error-alert" id="login-error-alert">
@@ -2134,6 +2139,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=18"></script>
+  <script src="app.js?v=19"></script>
 </body>
 </html>

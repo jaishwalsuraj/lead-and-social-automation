@@ -1,6 +1,6 @@
 // ==================== AUTHENTICATION & GLOBAL FETCH INTERCEPTOR ====================
 let currentUser = null;
-let authToken = localStorage.getItem('tg_auth_token') || null;
+let authToken = sessionStorage.getItem('tg_auth_token') || localStorage.getItem('tg_auth_token') || null;
 
 // Intercept window.fetch to automatically attach Bearer token and handle 401s
 const _nativeFetch = window.fetch.bind(window);
@@ -43,6 +43,10 @@ window.fetch = async function (url, options = {}) {
                        url.includes('/prescriptions/');
       if (!isPublic) {
         console.warn('[Auth Interceptor] 401 Unauthorized on:', url);
+        authToken = null;
+        currentUser = null;
+        sessionStorage.removeItem('tg_auth_token');
+        localStorage.removeItem('tg_auth_token');
         showLoginOverlay('Session expired or login required. Please sign in.');
       }
     }
@@ -83,15 +87,16 @@ async function copyToClipboard(text) {
   }
 }
 
-// Authentication Controller Functions
 function showLoginOverlay(msg) {
+  const container = document.getElementById('app-container');
+  if (container) container.style.setProperty('display', 'none', 'important');
   const overlay = document.getElementById('login-overlay');
+  if (overlay) overlay.style.setProperty('display', 'flex', 'important');
   const badge = document.getElementById('user-profile-badge');
   const btnLogin = document.getElementById('btn-header-login');
   const errorAlert = document.getElementById('login-error-alert');
   const errorText = document.getElementById('login-error-text');
 
-  if (overlay) overlay.style.display = 'flex';
   if (badge) badge.style.display = 'none';
   if (btnLogin) btnLogin.style.display = 'inline-flex';
 
@@ -112,7 +117,9 @@ function showLoginOverlay(msg) {
 
 function hideLoginOverlay() {
   const overlay = document.getElementById('login-overlay');
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) overlay.style.setProperty('display', 'none', 'important');
+  const container = document.getElementById('app-container');
+  if (container) container.style.setProperty('display', 'flex', 'important');
 }
 
 function showForgotPasswordView(e) {
@@ -324,6 +331,7 @@ async function doLogin(e) {
     if (res.ok && data.success && data.token) {
       authToken = data.token;
       currentUser = data.user;
+      sessionStorage.setItem('tg_auth_token', authToken);
       localStorage.setItem('tg_auth_token', authToken);
       hideLoginOverlay();
       applyRolePermissions();
@@ -377,13 +385,15 @@ async function logoutUser() {
   }
   authToken = null;
   currentUser = null;
+  sessionStorage.removeItem('tg_auth_token');
   localStorage.removeItem('tg_auth_token');
   showLoginOverlay('You have successfully signed out.');
 }
 
 async function checkAuthSession() {
-  authToken = localStorage.getItem('tg_auth_token') || null;
+  authToken = sessionStorage.getItem('tg_auth_token') || localStorage.getItem('tg_auth_token') || null;
   if (!authToken) {
+    showLoginOverlay();
     return false;
   }
   try {
@@ -404,7 +414,9 @@ async function checkAuthSession() {
   }
   authToken = null;
   currentUser = null;
+  sessionStorage.removeItem('tg_auth_token');
   localStorage.removeItem('tg_auth_token');
+  showLoginOverlay('Session expired or login required. Please sign in.');
   return false;
 }
 
@@ -742,7 +754,7 @@ function switchTab(tabId, updateHash = true) {
     accounts: 'Persistent Browser Sessions (Zero APIs Required)',
     settings: 'Agent Reasoning Intelligence & Safety Rules'
   };
-  document.getElementById('page-title').innerText = titles[tabId] || 'Anti-Gravity Growth Hub';
+  document.getElementById('page-title').innerText = titles[tabId] || 'TDF Growth Hub & Lead Outreach Engine';
 
   if (updateHash && window.location.hash !== `#${tabId}`) {
     history.replaceState(null, '', `#${tabId}`);
@@ -814,7 +826,7 @@ function initWebSocket() {
     }
     const indicator = document.getElementById('ws-indicator');
     if (indicator) indicator.innerText = 'Connected & Listening';
-    appendTerminalLog('Connected to Anti-Gravity Real-Time Event Hub', 'text-success');
+    appendTerminalLog('Connected to TDF Real-Time Event Hub', 'text-success');
     if (authToken) {
       try {
         ws.send(JSON.stringify({ type: 'auth', token: authToken }));
@@ -5200,8 +5212,9 @@ async function triggerPurgeDeadLeads(leadType = 'maps') {
     });
     const data = await res.json();
     if (data.success) {
-      showLeadNotificationToast('🧹 Dead Leads Purged', `Removed ${data.purgedCount || 0} dead leads from pipeline.`);
-      appendTerminalLog(`🧹 Purge complete: ${data.purgedCount || 0} dead leads removed. Pipeline is 100% clean.`, 'text-emerald');
+      const count = data.totalPurged !== undefined ? data.totalPurged : (data.purgedCount || 0);
+      showLeadNotificationToast('🧹 Dead Leads Purged', `Removed ${count} dead leads from pipeline.`);
+      appendTerminalLog(`🧹 Purge complete: ${count} dead leads removed. Pipeline is 100% clean.`, 'text-emerald');
       if (leadType === 'maps') {
         loadMapsLeads();
         loadMapsStats();
