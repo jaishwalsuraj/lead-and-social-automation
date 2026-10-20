@@ -15,7 +15,7 @@ import { reasoner } from '../agent/geminiReasoner.js';
 import { metaEngineBridge } from '../agent/metaEngineBridge.js';
 import { googleMapsAdapter } from '../platforms/googleMaps.js';
 import { leadVerifier } from '../agent/leadVerifier.js';
-import { ScorecardEngine, scorecardQuestions } from '../agent/scorecardEngine.js';
+import { ScorecardEngine, scorecardQuestions, detectNiche } from '../agent/scorecardEngine.js';
 import { ScorecardPdfGenerator } from '../agent/pdfGenerator.js';
 import { tunnelManager } from './tunnelManager.js';
 import { MapsScorecardBridge } from '../agent/mapsScorecardBridge.js';
@@ -587,7 +587,7 @@ app.post('/api/leads/:id/generate-dm', requireAuth, async (req, res) => {
 app.post('/api/leads/:id/status', requireAuth, (req, res) => {
   const { status } = req.body;
   LeadModel.updateStatus(req.params.id, status);
-  res.json({ success: true });
+  res.json({ success: true, lead: LeadModel.getById(req.params.id) });
 });
 
 // Get Single Social Lead

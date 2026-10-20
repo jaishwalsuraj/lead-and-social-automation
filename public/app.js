@@ -1460,7 +1460,16 @@ async function loadLeads() {
     const ageFilter = document.getElementById('filter-age')?.value || 'all';
     const sortBy = document.getElementById('filter-sort')?.value || 'newest';
     const res = await fetch(`/api/leads?limit=300&maxDays=${ageFilter}&sortBy=${sortBy}&connectedOnly=false`);
-    allLeads = await res.json();
+    if (!res.ok) {
+      console.warn('Failed to load leads, status:', res.status);
+      return;
+    }
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      allLeads = data;
+    } else if (data && Array.isArray(data.leads)) {
+      allLeads = data.leads;
+    }
     filterLeads();
     updatePipelineCounters();
   } catch (err) {
@@ -1469,6 +1478,7 @@ async function loadLeads() {
 }
 
 function updatePipelineCounters() {
+  if (!Array.isArray(allLeads)) allLeads = [];
   // Disqualified and dead leads are excluded from pipeline counts
   const validLeads = allLeads.filter(l => l.feedback !== 'incorrect' && l.status !== 'disqualified' && l.verification_status !== 'dead');
 
@@ -1508,6 +1518,7 @@ function updateLeadCounter() {
 }
 
 function filterLeads() {
+  if (!Array.isArray(allLeads)) allLeads = [];
   const platform = document.getElementById('filter-platform')?.value || 'all';
   const intent = document.getElementById('filter-intent')?.value || 'all';
   const age = document.getElementById('filter-age')?.value || 'all';
@@ -1568,6 +1579,9 @@ function filterLeads() {
     } else if (verifiedFilter === 'unverified') {
       matchVerified = !lead.verification_status || lead.verification_status === 'unverified';
     }
+
+    // Disqualified leads & dead profiles stay hidden unless user selects "Not a Lead" from quality dropdown
+    const notDisqualified = quality === 'incorrect' || (lead.feedback !== 'incorrect' && lead.status !== 'disqualified' && lead.verification_status !== 'dead');
 
     // 7. Search keyword filter (matches author, handle, post text, signal)
     const searchVal = (document.getElementById('social-lead-search')?.value || '').toLowerCase().trim();
@@ -2923,7 +2937,12 @@ async function loadMapsLeads() {
 
   try {
     const res = await fetch(`/api/maps/leads?${params.toString()}`);
-    allMapsLeads = await res.json();
+    if (!res.ok) {
+      console.warn('Failed to load Maps leads, status:', res.status);
+      return;
+    }
+    const data = await res.json();
+    allMapsLeads = Array.isArray(data) ? data : (data.leads || []);
     renderMapsCards(allMapsLeads);
     const counterEl = document.getElementById('maps-results-count');
     if (counterEl) counterEl.innerText = `${allMapsLeads.length} leads found`;
@@ -3243,6 +3262,64 @@ function extractCleanEmailPitch(lead, rawContent = null) {
   }
 
   return { subject, body };
+}
+
+const MAPS_NICHES = {
+  medical: { name: 'Doctor & Clinic', icon: '🩺' },
+  legal: { name: 'Law Firm & Attorney', icon: '⚖️' },
+  real_estate: { name: 'Real Estate & Brokerage', icon: '🏢' },
+  beauty: { name: 'Beauty, Salon & Aesthetic', icon: '✨' },
+  fitness: { name: 'Gym & Fitness Center', icon: '🏋️' },
+  home_services: { name: 'Home Services & Contractor', icon: '🛠️' },
+  towing: { name: 'Towing & Auto Repair', icon: '🚗' },
+  b2b_consulting: { name: 'B2B & Professional Advisory', icon: '💼' },
+  restaurant: { name: 'Restaurant & Dining', icon: '🍽️' },
+  general: { name: 'Local Business', icon: '📍' }
+};
+
+function detectBusinessNiche(category = '', name = '') {
+  const s = `${category || ''} ${name || ''}`.toLowerCase();
+  if (s.includes('dent') || s.includes('oral') || s.includes('implant') || s.includes('smile') ||
+      s.includes('derma') || s.includes('skin') || s.includes('doctor') || s.includes('clinic') || 
+      s.includes('ortho') || s.includes('eye') || s.includes('hospital') || s.includes('medic') || 
+      s.includes('pediatric') || s.includes('physio') || s.includes('health') || s.includes('pharma') ||
+      s.includes('chiro') || s.includes('surgeon')) {
+    return 'medical';
+  }
+  if (s.includes('law') || s.includes('attorney') || s.includes('legal') || s.includes('advocate') || 
+      s.includes('solicitor') || s.includes('barrister') || s.includes('court') || s.includes('litigat') ||
+      s.includes('counsel')) {
+    return 'legal';
+  }
+  if (s.includes('real estate') || s.includes('realt') || s.includes('property') || s.includes('estate') || 
+      s.includes('brokerage') || s.includes('housing') || s.includes('builder') || s.includes('developer')) {
+    return 'real_estate';
+  }
+  if (s.includes('salon') || s.includes('spa') || s.includes('beauty') || s.includes('hair') || 
+      s.includes('aesthetic') || s.includes('nail') || s.includes('makeup') || s.includes('barber')) {
+    return 'beauty';
+  }
+  if (s.includes('gym') || s.includes('fitness') || s.includes('crossfit') || s.includes('yoga') || 
+      s.includes('pilates') || s.includes('workout') || s.includes('trainer') || s.includes('coach')) {
+    return 'fitness';
+  }
+  if (s.includes('plumb') || s.includes('hvac') || s.includes('roof') || s.includes('electric') || 
+      s.includes('contractor') || s.includes('pest') || s.includes('solar') || s.includes('clean') ||
+      s.includes('handyman') || s.includes('paint')) {
+    return 'home_services';
+  }
+  if (s.includes('tow') || s.includes('roadside') || s.includes('wrecker') || s.includes('auto repair') || 
+      s.includes('mechanic') || s.includes('garage') || s.includes('tire')) {
+    return 'towing';
+  }
+  if (s.includes('consult') || s.includes('account') || s.includes('tax') || s.includes('financial') || 
+      s.includes('agency') || s.includes('marketing') || s.includes('software') || s.includes('b2b')) {
+    return 'b2b_consulting';
+  }
+  if (s.includes('restaurant') || s.includes('cafe') || s.includes('bistro') || s.includes('dining')) {
+    return 'restaurant';
+  }
+  return 'general';
 }
 
 function renderMapsLeadCard(lead) {
@@ -3946,7 +4023,8 @@ async function loadScorecardLeads() {
   try {
     const res = await fetch(`/api/scorecard/leads?status=${status}&sortBy=${sortBy}`);
     if (!res.ok) throw new Error('Failed to load scorecard leads');
-    allScorecardLeads = await res.json();
+    const data = await res.json();
+    allScorecardLeads = Array.isArray(data) ? data : (data.leads || []);
     renderScorecardCards(allScorecardLeads);
     loadScorecardStats();
   } catch (err) {

@@ -149,6 +149,7 @@ export function initDatabase() {
       comments_count INTEGER DEFAULT 0,
       dms_count INTEGER DEFAULT 0,
       posts_count INTEGER DEFAULT 0,
+      likes_count INTEGER DEFAULT 0,
       UNIQUE(date_str, platform)
     );
 
@@ -1548,12 +1549,12 @@ export const QuotaModel = {
     const row = db.prepare('SELECT * FROM daily_quotas WHERE date_str = ? AND platform = ?').get(todayStr, platform);
     if (!row) {
       db.prepare('INSERT OR IGNORE INTO daily_quotas (date_str, platform) VALUES (?, ?)').run(todayStr, platform);
-      return { date_str: todayStr, platform, comments_count: 0, dms_count: 0, posts_count: 0 };
+      return { date_str: todayStr, platform, comments_count: 0, dms_count: 0, posts_count: 0, likes_count: 0 };
     }
     return row;
   },
   increment: (platform, type = 'comments_count') => {
-    const allowed = ['comments_count', 'dms_count', 'posts_count'];
+    const allowed = ['comments_count', 'dms_count', 'posts_count', 'likes_count'];
     if (!allowed.includes(type)) {
       throw new Error(`Invalid quota increment type: ${type}`);
     }
