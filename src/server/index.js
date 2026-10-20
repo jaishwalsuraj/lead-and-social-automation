@@ -1231,10 +1231,18 @@ app.get('/api/scorecard/public-report/:id', publicApiRateLimiter.middleware(), (
 app.post('/api/scorecard/submit', publicApiRateLimiter.middleware(), async (req, res) => {
   try {
     const businessName = req.body.businessName || req.body.business_name;
-    const contactPerson = req.body.contactPerson || req.body.contact_person;
+    const businessType = req.body.businessType || req.body.business_type;
+    const rawPerson = (req.body.contactPerson || req.body.contact_person || '').trim();
+    let contactPerson = rawPerson.replace(/^(?:dr\.?\s*|doctor\s*)+/i, '').trim();
+    const isMed = detectNiche(`${businessType || ''} ${businessName || ''}`) === 'medical';
+    if (isMed && contactPerson) {
+      contactPerson = `Dr. ${contactPerson}`;
+    } else if (!contactPerson) {
+      contactPerson = rawPerson || (isMed ? 'Doctor & Practice Principal' : 'Business Principal');
+    }
+
     const phone = req.body.phone;
     const email = req.body.email;
-    const businessType = req.body.businessType || req.body.business_type;
     const city = req.body.city;
     const consultationFee = req.body.consultationFee || req.body.consultation_fee;
     const workTiming = req.body.workTiming || req.body.work_timing;

@@ -148,27 +148,33 @@ export class MapsScorecardBridge {
 
     // 5. Generate CLEAN, High-Converting Cold Email Pitch (NO raw JSON, NO ASCII clutter!)
     const cleanSubject = isMedical
-      ? `Quick question regarding ${lead.business_name} (${lead.city || 'patient acquisition'})`
+      ? `Quick question regarding ${lead.business_name} (${lead.city || 'patient video authority'})`
       : `Digital audit & video inquiry for ${lead.business_name}`;
 
-    const salutation = isMedical
-      ? (contactPerson.toLowerCase().startsWith('dr') ? contactPerson : `Dr. / Clinic Director at ${lead.business_name}`)
-      : `${lead.business_name} Team`;
+    let cleanName = (contactPerson || '').replace(/^(?:dr\.?\s*|doctor\s*)+/i, '').trim();
+    const isGeneric = !cleanName || /^clinic director/i.test(cleanName) || /team$/i.test(cleanName) || cleanName.toLowerCase() === 'director';
+    const salutation = isMedical 
+      ? (isGeneric ? `Doctor & Practice Principal` : `Dr. ${cleanName}`) 
+      : (isGeneric ? `${lead.business_name} Team` : cleanName);
 
-    const cleanEmailPitch = `Hi ${salutation},
+    const cleanEmailPitch = `Hello ${salutation},
 
-I came across ${lead.business_name} on Google Maps while reviewing local healthcare practices in ${lead.city || 'your area'}. With ${rating > 0 ? `${rating}⭐ across ${reviewsCount} reviews` : 'your stellar local presence'}, your reputation is impressive.
+Quick question: why is a ${lead.category || 'practice'} with ${rating > 0 ? `${rating}⭐ across ${reviewsCount} reviews` : 'your stellar reputation'} in ${lead.city || 'your area'} completely absent from local patient video feeds?
 
-I put together a private, 2-minute Digital Growth Audit & AI Video Roadmap specifically for ${lead.business_name}:
+While researching local specialists in ${lead.city || 'your area'}, I noticed a significant discrepancy between your offline clinical reputation and your video presence. Competing practices are actively winning high-ticket private consultations simply because their doctors appear regularly on Instagram Reels and YouTube.
 
-👉 View Your Custom Practice Scorecard & Video Audit:
+We put together a private, confidential Rx Growth Prescription specifically for ${lead.business_name}:
+
+👉 View Your Official Practice Scorecard & Video Audit:
 ${publicScorecardUrl}
 
-It breaks down 3 key opportunities (including how competing clinics in ${lead.city || 'your area'} are winning high-ticket private cases through short-form educational video) along with 3 viral video concepts tailored for your practice.
+It diagnoses 3 critical patient leakage points and maps out 3 viral educational Reel hooks tailored specifically for your practice.
 
-Would you be open to a brief 5-minute chat this week on how we can implement this for you on autopilot?
+We also designed an AI Doctor Avatar protocol where we clone your likeness and voice from a single 2-minute phone recording to produce 15 educational Reels a month on autopilot—without taking 1 minute away from your patient hours.
 
-Feel free to pick a convenient briefing time here:
+Would you be open to a 30-second preview of what your AI Avatar looks like?
+
+Feel free to pick a convenient 10-minute briefing time on Topmate:
 ${TOPMATE_URL}
 
 Best regards,
@@ -178,11 +184,11 @@ Founder, ${AGENCY_NAME} | Medical AI & Patient Growth Engine
 Calendar: ${TOPMATE_URL}
 Email: hello@surajjaiswal.com`;
 
-    // 6. Clean WhatsApp Direct Message
-    const cleanWhatsappPitch = `Hello ${salutation}! I reviewed ${lead.business_name} on Google Maps in ${lead.city || 'your area'} (${rating}⭐). We prepared a complimentary 2-min Digital Patient Acquisition & Video Audit for your clinic: ${publicScorecardUrl} — Would love to share a 3-min AI Avatar demo if you are open to it!`;
+    // 6. Pattern-Breaking Cold WhatsApp Outreach
+    const cleanWhatsappPitch = `Hello ${salutation}, quick question: why is a practice with ${rating > 0 ? `${rating}⭐ (${reviewsCount} reviews)` : 'top clinical ratings'} in ${lead.city || 'your area'} completely absent from local patient video feeds?\n\nWe put together a private, confidential Rx Growth Prescription for ${lead.business_name}: ${publicScorecardUrl}\n\nInside, we diagnosed 3 patient leakage points and scripted 3 viral educational Reel concepts for your clinic. We also have a 40-second sample showing what your AI Doctor Avatar looks and sounds like.\n\nOpen to seeing that 40-second preview right here? — Suraj Jaiswal, Founder @ The Digital Frog`;
 
     // 7. Clean Social DM Pitch
-    const cleanDMPitch = `Hey ${lead.business_name} team! Saw your profile here in ${lead.city || 'your area'}. We put together a confidential 2-minute Digital Health & Short-Form Video Audit for your practice: ${publicScorecardUrl} — Happy to share a quick preview of your doctor's AI avatar if you'd like to check it out!`;
+    const cleanDMPitch = `Hey ${salutation}! Noticed your stellar reputation in ${lead.city || 'your area'}. Competing clinics are winning high-ticket cases simply by having doctors on Reels. We generated a private Rx Video Audit for you: ${publicScorecardUrl} — Happy to share a 30-second sample of your AI Video Clone if you'd like to check it out! — Suraj @ The Digital Frog`;
 
     return {
       scorecardId,

@@ -14,38 +14,46 @@ export class ScorecardPdfGenerator {
    * e.g. "Quick Towing Dispatch" -> "growth-blueprint-towing-quick-towing-dispatch.pdf"
    */
   static getPrescriptionFileName(contactPerson, businessName, leadId, businessType = '') {
-    const nicheKey = detectNiche(businessType || businessName);
-    const profile = NICHE_REGISTRY[nicheKey] || NICHE_REGISTRY.general;
+    const rawType = businessType || '';
+    const nicheKey = detectNiche(`${rawType} ${businessName}`);
+    const isMed = (nicheKey === 'medical');
 
     let name = (contactPerson || '').trim();
-    if (!name || name.toLowerCase() === 'director' || name.toLowerCase() === 'doctor') {
-      name = (businessName || '').trim();
-    }
+    name = name.replace(/^(?:dr\.?\s*|doctor\s*)+/i, '').trim();
+
+    const isGeneric = !name || 
+      /^clinic director/i.test(name) || 
+      /team$/i.test(name) || 
+      name.toLowerCase() === 'director' || 
+      name.toLowerCase() === 'doctor' ||
+      name.toLowerCase().includes('practice principal');
+
+    let base = isGeneric ? (businessName || 'client') : name;
     // Remove credentials / degrees / parenthetical notes
-    name = name.replace(/\s*\([^)]*\)/g, '');
-    name = name.replace(/,\s*(?:bds|mds|mbbs|md|ms|dnb|fdr|phd|mch|fics|esq|jd|cpa).*$/i, '');
+    base = base.replace(/,\s*(?:bds|mds|mbbs|md|ms|dnb|fdr|phd|mch|fics|esq|jd|cpa).*$/i, '');
+    base = base.replace(/\s*\([^)]*\)/g, '');
 
-    if (nicheKey === 'medical') {
-      if (!name.match(/^(?:dr\.?|doctor)\b/i)) {
-        name = 'dr ' + name;
-      }
-    }
-
-    let slug = name
+    let slug = base
       .toLowerCase()
-      .replace(/^doctor\b/i, 'dr')
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
-    if (!slug) {
+    // Normalize dr-
+    slug = slug.replace(/^(?:dr-)+/, '');
+    if (isMed) {
+      slug = 'dr-' + slug;
+    }
+
+    if (!slug || slug === 'dr-') {
       slug = leadId ? `client-${leadId}` : 'client';
     }
 
-    return `${profile.filePrefix}-${slug}.pdf`;
+    // ALL scorecards standardized to rx-prescription-[slug].pdf format matching Dr. Rohan Kapoor
+    return `rx-prescription-${slug}.pdf`;
   }
 
   /**
-   * Generates a high-resolution, vector-quality A4 PDF tailored to the business niche.
+   * Generates a high-resolution, vector-quality A4 PDF in the official Dr. Rohan Kapoor Rx prescription format.
    */
   static async generatePrescriptionPdf(data) {
     const leadId = data.leadId || Date.now();
@@ -64,12 +72,20 @@ export class ScorecardPdfGenerator {
     const filePath = path.join(outputDir, fileName);
     const publicUrl = `/prescriptions/${fileName}`;
 
-    let cleanPerson = (data.contactPerson || '').trim();
-    if (!cleanPerson || cleanPerson.toLowerCase() === 'director' || cleanPerson.toLowerCase() === 'doctor') {
-      cleanPerson = profile.roleLabel;
-    }
-    if (isMed && !cleanPerson.match(/^(?:dr\.?|doctor)\b/i)) {
-      cleanPerson = `Dr. ${cleanPerson}`;
+    let rawPerson = (data.contactPerson || '').trim();
+    rawPerson = rawPerson.replace(/^(?:dr\.?\s*|doctor\s*)+/i, '').trim();
+
+    const isGeneric = !rawPerson || 
+      /^clinic director/i.test(rawPerson) || 
+      /team$/i.test(rawPerson) || 
+      rawPerson.toLowerCase() === 'director' || 
+      rawPerson.toLowerCase() === 'doctor';
+
+    let cleanPerson = '';
+    if (isGeneric) {
+      cleanPerson = isMed ? `Doctor & Practice Principal` : profile.roleLabel;
+    } else {
+      cleanPerson = isMed ? `Dr. ${rawPerson}` : rawPerson;
     }
 
     const clinic = data.businessName || 'Business Organization';
@@ -107,13 +123,17 @@ export class ScorecardPdfGenerator {
       day: 'numeric'
     });
 
-    const caseBadgeText = `CASE REF: #${profile.badge.replace(/[^a-zA-Z0-9]/g, '') || 'AUDIT'}-2026-${leadId}`;
+    const caseBadgeText = `CASE REF: #RX-2026-${leadId}`;
+
+    const reportTitle = isMed 
+      ? '℞ CLINICAL PRACTICE GROWTH PRESCRIPTION' 
+      : '℞ OFFICIAL PRACTICE GROWTH PRESCRIPTION';
 
     const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>${profile.reportTitle} - ${cleanPerson}</title>
+  <title>${reportTitle} - ${cleanPerson}</title>
   <style>
     @page {
       size: A4;
@@ -405,7 +425,7 @@ export class ScorecardPdfGenerator {
 
   <!-- Prescription Pad Main -->
   <div class="rx-box">
-    <div class="rx-watermark">${profile.badge}</div>
+    <div class="rx-watermark">℞</div>
     
     <div class="rx-sec-title">1. Diagnostic Finding & ${isMed ? 'Clinical Practice' : 'Revenue'} Vulnerability</div>
     <div class="rx-text">

@@ -617,12 +617,20 @@ export class ScorecardEngine {
     const profile = NICHE_REGISTRY[nicheKey] || NICHE_REGISTRY.general;
 
     // Contact person formatting
-    let cleanPerson = (contactPerson || '').trim();
-    if (!cleanPerson || cleanPerson.toLowerCase() === 'director' || cleanPerson.toLowerCase() === 'doctor') {
-      cleanPerson = profile.roleLabel;
-    }
-    if (nicheKey === 'medical' && !cleanPerson.match(/^(?:dr\.?|doctor)\b/i)) {
-      cleanPerson = `Dr. ${cleanPerson}`;
+    let rawPerson = (contactPerson || '').trim();
+    rawPerson = rawPerson.replace(/^(?:dr\.?\s*|doctor\s*)+/i, '').trim();
+
+    const isGeneric = !rawPerson || 
+      /^clinic director/i.test(rawPerson) || 
+      /team$/i.test(rawPerson) || 
+      rawPerson.toLowerCase() === 'director' || 
+      rawPerson.toLowerCase() === 'doctor';
+
+    let cleanPerson = '';
+    if (isGeneric) {
+      cleanPerson = (nicheKey === 'medical') ? 'Doctor & Practice Principal' : profile.roleLabel;
+    } else {
+      cleanPerson = (nicheKey === 'medical') ? `Dr. ${rawPerson}` : rawPerson;
     }
 
     // Tailored Diagnosis
@@ -640,18 +648,20 @@ export class ScorecardEngine {
 
     // Format Report Text
     const isMed = (nicheKey === 'medical');
-    const headerTitle = profile.reportTitle;
-    const caseRef = `#${profile.badge.replace(/[^a-zA-Z0-9]/g, '') || 'AUDIT'}-${Math.floor(1000 + Math.random() * 9000)}-${nicheKey.toUpperCase()}`;
+    const headerTitle = isMed 
+      ? '℞ CLINICAL PRACTICE GROWTH PRESCRIPTION' 
+      : '℞ OFFICIAL PRACTICE & BUSINESS GROWTH PRESCRIPTION';
+    const caseRef = `#RX-2026-${Math.floor(1000 + Math.random() * 9000)}-${nicheKey.toUpperCase()}`;
 
-    const reportText = `Subject: ${isMed ? '℞ Clinical Growth Prescription' : '📈 Growth Blueprint & Audit'} for ${cleanPerson} | ${cleanBusiness}
+    const reportText = `Subject: ℞ Clinical & Growth Prescription for ${cleanPerson} | ${cleanBusiness}
 
 ${headerTitle}
 ══════════════════════════════════════════════════════════════════════════
-${isMed ? 'DOCTOR / DIRECTOR' : 'PRINCIPAL / OWNER'}: ${cleanPerson}
-${isMed ? 'CLINIC / PRACTICE' : 'BUSINESS / FIRM'} : ${cleanBusiness} (${cleanCity})
-INDUSTRY NICHE    : ${profile.label}
-DIGITAL HEALTH    : ${scores.overallScore}/100 (${scores.grade.toUpperCase()} - ${scores.statusSummary})
-DIAGNOSTIC CASE REF: ${caseRef}
+DOCTOR / PRACTICE PRINCIPAL: ${cleanPerson}
+CLINIC / BUSINESS          : ${cleanBusiness} (${cleanCity})
+INDUSTRY CLASSIFICATION    : ${profile.label}
+DIGITAL HEALTH VITALS      : ${scores.overallScore}/100 (${scores.grade.toUpperCase()} - ${scores.statusSummary})
+DIAGNOSTIC CASE REF        : ${caseRef}
 ══════════════════════════════════════════════════════════════════════════
 
 DEAR ${cleanPerson.toUpperCase()},

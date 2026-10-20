@@ -374,78 +374,115 @@
           </button>
         </div>
 
-        <!-- Filter & Sorting Controls Toolbar -->
-        <div class="leads-toolbar">
-          <div class="toolbar-filters">
-            <select id="filter-platform" onchange="filterLeads()" title="Filter by channel">
-              <option value="all" selected>📁 All Channels (All Discovered Leads)</option>
-              <option value="connected">🟢 Connected Channels Only</option>
-              <option value="threads">🧵 Threads</option>
-              <option value="instagram">📸 Instagram</option>
-              <option value="facebook">👥 Facebook</option>
-              <option value="linkedin">💼 LinkedIn</option>
-            </select>
-            <select id="filter-sort" onchange="sortAndFilterLeads()" title="Order CRM leads by date or metrics">
-              <option value="newest" selected>📅 Date: Newest First (Descending ⬇️)</option>
-              <option value="oldest">📅 Date: Oldest First (Ascending ⬆️)</option>
-              <option value="intent">🔥 Highest Intent Score</option>
-              <option value="freshness">⏱️ Post Published Date</option>
-              <option value="status">📊 Pipeline Stage</option>
-            </select>
-            <button type="button" class="btn btn-sm btn-outline" id="btn-sort-direction" onclick="toggleSortDirection()" title="Quick toggle date order: Newest First (Descending) / Oldest First (Ascending)" style="font-weight: 600; padding: 6px 12px;">
-              ⬇️ Newest First
-            </button>
-            <select id="filter-outreach" onchange="onOutreachDropdownChange()" title="Filter by Outreach Status (Reachout, DM Done, Comment Done)">
-              <option value="all" selected>📬 All Outreach Status</option>
-              <option value="new">✨ New Leads (Pending Outreach)</option>
-              <option value="reached_out">💬 Any Reachout Done (Comment or DM)</option>
-              <option value="comment_done">💬 Comment Done / Reached Out</option>
-              <option value="dm_done">✉️ DM Done / Direct Message Sent</option>
-              <option value="converted">🏆 Converted Clients</option>
-            </select>
-            <select id="filter-intent" onchange="filterLeads()" title="Filter by buying intent">
-              <option value="all">All Intent Scores</option>
-              <option value="high">High Intent (70%+)</option>
-              <option value="medium">Medium Intent (45% - 69%)</option>
-            </select>
-            <select id="filter-age" onchange="loadLeads()" title="Filter by post publication age">
-              <option value="7" selected>⚡ Fresh Enquiries (<= 7 Days Old)</option>
-              <option value="3">🔥 Very Recent (<= 3 Days Old)</option>
-              <option value="1">⏱️ Last 24 Hours (<= 1 Day Old)</option>
-              <option value="all">📁 All Leads (Include Dead / > 7d)</option>
-            </select>
-            <select id="filter-quality" onchange="filterLeads()" title="Filter by user rating">
-              <option value="all">⭐ All Quality Ratings</option>
-              <option value="correct">👍 Correct Leads (Verified)</option>
-              <option value="unreviewed">⏳ Unreviewed Leads</option>
-              <option value="incorrect">👎 Disqualified / Not a Lead</option>
-            </select>
-            <select id="filter-verified" onchange="filterLeads()" title="Filter by URL / profile verification status">
-              <option value="all" selected>🛡️ All Verification Statuses</option>
-              <option value="verified">✅ Verified Live Leads Only</option>
-              <option value="unverified">⏳ Unverified / Pending Check</option>
-            </select>
-          </div>
-          <div class="toolbar-actions">
-            <!-- View Mode Switcher -->
-            <div class="view-mode-selector">
-              <button class="view-btn active" id="btn-view-cards" onclick="setLeadView('cards')" title="Card View">
-                🗂️ Cards
-              </button>
-              <button class="view-btn" id="btn-view-table" onclick="setLeadView('table')" title="Table View">
-                📋 Table
+        <!-- Sleek, Modern, Decluttered Social CRM Toolbar -->
+        <div class="leads-toolbar-v2">
+          <!-- Main Action / Filter Strip -->
+          <div class="leads-toolbar-main">
+            <!-- Search & Quick Filters -->
+            <div class="leads-quick-filters">
+              <div class="search-box-wrap">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="social-lead-search" class="search-input-sleek" placeholder="Search author, @handle, keyword..." oninput="filterLeads()" />
+              </div>
+
+              <select id="filter-platform" class="sleek-select" onchange="filterLeads()" title="Filter by channel">
+                <option value="all" selected>📁 All Channels</option>
+                <option value="connected">🟢 Connected Channels</option>
+                <option value="threads">🧵 Threads</option>
+                <option value="instagram">📸 Instagram</option>
+                <option value="facebook">👥 Facebook</option>
+                <option value="linkedin">💼 LinkedIn</option>
+              </select>
+
+              <select id="filter-outreach" class="sleek-select" onchange="onOutreachDropdownChange()" title="Filter by Outreach Status">
+                <option value="all" selected>📬 All Status</option>
+                <option value="new">✨ New Leads</option>
+                <option value="reached_out">💬 Reached Out</option>
+                <option value="comment_done">💬 Comment Done</option>
+                <option value="dm_done">✉️ DM Sent</option>
+                <option value="converted">🏆 Converted</option>
+              </select>
+
+              <select id="filter-sort" class="sleek-select" onchange="sortAndFilterLeads()" title="Sort leads">
+                <option value="newest" selected>📅 Newest First</option>
+                <option value="oldest">📅 Oldest First</option>
+                <option value="intent">🔥 Highest Intent</option>
+                <option value="freshness">⏱️ Post Date</option>
+              </select>
+
+              <!-- Collapsible Drawer Toggle Button -->
+              <button type="button" class="btn btn-sm btn-ghost" id="btn-toggle-adv-filters" onclick="toggleAdvancedFilters()" title="More granular filters (Intent, Post Age, Quality, Verification)">
+                <span>⚙️ More Filters</span>
+                <span id="adv-filter-count-badge" class="badge-mini" style="display: none; background: #6366f1; color: #fff; padding: 1px 6px; border-radius: 99px; font-size: 0.7rem; font-weight: 700; margin-left: 4px;">0</span>
               </button>
             </div>
-            <button class="btn btn-outline-emerald" onclick="verifyAllSocialLeads()" id="btn-verify-leads" title="Run instant live verification check to confirm 100% active profiles and purge 404s/deleted accounts">
-              🛡️ <span>Verify All Leads</span>
-            </button>
-            <button class="btn btn-outline" onclick="openBulkImportModal()" title="Upload CSV or paste data">📂 Import Leads</button>
-            <button class="btn btn-outline-danger" onclick="triggerPurgeDeadLeads()" title="Purge dead leads from CRM">🗑️ Purge Dead Leads</button>
-            <button class="btn btn-secondary" onclick="loadLeads()">Refresh</button>
-            <button class="btn btn-primary" onclick="triggerLeadScan()" id="btn-scan-connected">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <span>Scan Connected Channels</span>
-            </button>
+
+            <!-- View Switcher & Action Cluster -->
+            <div class="leads-quick-actions">
+              <div class="view-mode-selector">
+                <button class="view-btn active" id="btn-view-cards" onclick="setLeadView('cards')" title="Card View">🗂️ Cards</button>
+                <button class="view-btn" id="btn-view-table" onclick="setLeadView('table')" title="Table View">📋 Table</button>
+              </div>
+
+              <button class="btn btn-sm btn-ghost" onclick="loadLeads()" title="Refresh Leads">🔄 Refresh</button>
+              <button class="btn btn-sm btn-outline-emerald" onclick="verifyAllSocialLeads()" id="btn-verify-leads" title="Verify active accounts">🛡️ Verify Active</button>
+              <button class="btn btn-sm btn-outline" onclick="openBulkImportModal()" title="Import CSV/Data">📂 Import</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="triggerPurgeDeadLeads()" title="Purge dead leads">🗑️ Purge</button>
+
+              <!-- Standout Primary Scan CTA -->
+              <button class="btn btn-sm btn-primary btn-scan-glow" onclick="triggerLeadScan()" id="btn-scan-connected">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <span>Scan Connected Channels</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Secondary Collapsible Advanced Drawer (Cleanly tucked away, zero horizontal overflow) -->
+          <div class="leads-adv-drawer" id="adv-filters-drawer" style="display: none;">
+            <div class="adv-drawer-inner">
+              <div class="adv-filter-item">
+                <label>Intent Match:</label>
+                <select id="filter-intent" class="sleek-select" onchange="filterLeads()">
+                  <option value="all">All Intent Scores</option>
+                  <option value="high">High Intent (70%+)</option>
+                  <option value="medium">Medium Intent (45%-69%)</option>
+                </select>
+              </div>
+
+              <div class="adv-filter-item">
+                <label>Post Freshness:</label>
+                <select id="filter-age" class="sleek-select" onchange="loadLeads()">
+                  <option value="7" selected>⚡ Fresh (<= 7 Days)</option>
+                  <option value="3">🔥 Very Recent (<= 3 Days)</option>
+                  <option value="1">⏱️ Last 24 Hours</option>
+                  <option value="all">📁 All Leads (> 7 Days)</option>
+                </select>
+              </div>
+
+              <div class="adv-filter-item">
+                <label>AI Quality Rating:</label>
+                <select id="filter-quality" class="sleek-select" onchange="filterLeads()">
+                  <option value="all">⭐ All Ratings</option>
+                  <option value="correct">👍 Correct (Verified)</option>
+                  <option value="unreviewed">⏳ Unreviewed</option>
+                  <option value="incorrect">👎 Disqualified</option>
+                </select>
+              </div>
+
+              <div class="adv-filter-item">
+                <label>URL Verification:</label>
+                <select id="filter-verified" class="sleek-select" onchange="filterLeads()">
+                  <option value="all" selected>🛡️ All Statuses</option>
+                  <option value="verified">✅ Verified Live Only</option>
+                  <option value="unverified">⏳ Unverified / Pending</option>
+                </select>
+              </div>
+
+              <!-- Hidden sort direction button kept for backwards compat -->
+              <button type="button" id="btn-sort-direction" style="display: none;" onclick="toggleSortDirection()"></button>
+
+              <button type="button" class="btn btn-xs btn-ghost text-dim" onclick="resetAdvancedFilters()">Reset Extra Filters</button>
+            </div>
           </div>
         </div>
 
@@ -1743,6 +1780,46 @@
           <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 0.75rem; text-align: center;">
             <div id="modal-sc-score-conv" style="font-size: 1.25rem; font-weight: 800; color: #3b82f6;">50/100</div>
             <div style="font-size: 0.72rem; color: #94a3b8;">⚡ Lead Response Speed</div>
+          </div>
+        <!-- Viral Pattern-Break Outreach Pitch Selector -->
+        <div class="viral-outreach-card" style="margin-bottom: 1.25rem; background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 12px; padding: 1rem; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 1.2rem;">⚡</span>
+              <div>
+                <strong style="color: #38bdf8; font-size: 0.95rem;">Viral Hook & Pattern-Break Outreach Engine</strong>
+                <div id="sc-scenario-desc" style="font-size: 0.76rem; color: #94a3b8;">
+                  Inbound copy: Cites self-test score & video absence wakeup call.
+                </div>
+              </div>
+            </div>
+            
+            <!-- Scenario Switcher Tabs -->
+            <div class="scenario-tab-bar" style="display: flex; gap: 0.35rem; background: rgba(15, 23, 42, 0.7); padding: 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+              <button type="button" class="scenario-btn active" id="sc-tab-inbound" onclick="switchScorecardScenario('inbound')">
+                ⚡ Scenario A: Inbound Form Completed
+              </button>
+              <button type="button" class="scenario-btn" id="sc-tab-outbound" onclick="switchScorecardScenario('outbound')">
+                🎯 Scenario B: Cold Outreach (Maps)
+              </button>
+            </div>
+          </div>
+
+          <!-- Ready-to-Send Message Preview Box -->
+          <textarea id="modal-sc-viral-msg-preview" readonly style="width: 100%; min-height: 135px; font-size: 0.82rem; line-height: 1.48; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #f1f5f9; padding: 0.75rem; resize: vertical; margin-bottom: 0.65rem; font-family: inherit;"></textarea>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <div style="font-size: 0.74rem; color: #34d399; font-weight: 600;">
+              ✓ Clean Salutation (No "Dr. Dr.") • ✓ Direct ℞ Link • ✓ Zero Phone Number in Signature
+            </div>
+            <div style="display: flex; gap: 0.45rem;">
+              <button type="button" class="btn btn-sm btn-outline" onclick="copyCurrentScorecardViralMessage()">
+                📋 Copy Message
+              </button>
+              <a href="#" target="_blank" class="btn btn-sm btn-success" id="modal-sc-viral-wa-send-btn">
+                💬 Open in WhatsApp
+              </a>
+            </div>
           </div>
         </div>
 

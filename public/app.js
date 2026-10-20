@@ -1569,10 +1569,18 @@ function filterLeads() {
       matchVerified = !lead.verification_status || lead.verification_status === 'unverified';
     }
 
-    // Disqualified leads & dead profiles stay hidden unless user selects "Not a Lead" from quality dropdown
-    const notDisqualified = quality === 'incorrect' || (lead.feedback !== 'incorrect' && lead.status !== 'disqualified' && lead.verification_status !== 'dead');
+    // 7. Search keyword filter (matches author, handle, post text, signal)
+    const searchVal = (document.getElementById('social-lead-search')?.value || '').toLowerCase().trim();
+    let matchSearch = true;
+    if (searchVal) {
+      const author = (lead.author_name || '').toLowerCase();
+      const handle = (lead.author_handle || '').toLowerCase();
+      const post = (lead.post_text || '').toLowerCase();
+      const signal = (lead.intent_reason || '').toLowerCase();
+      matchSearch = author.includes(searchVal) || handle.includes(searchVal) || post.includes(searchVal) || signal.includes(searchVal);
+    }
 
-    return matchPlatform && matchIntent && matchAge && matchStage && matchQuality && matchVerified && notDisqualified;
+    return matchPlatform && matchIntent && matchAge && matchStage && matchQuality && matchVerified && notDisqualified && matchSearch;
   });
 
   // Apply sorting
@@ -1605,6 +1613,58 @@ function filterLeads() {
 
   renderLeads(filtered);
   updatePipelineCounters();
+  updateAdvFiltersBadge();
+}
+
+function toggleAdvancedFilters() {
+  const drawer = document.getElementById('adv-filters-drawer');
+  if (!drawer) return;
+  const isHidden = drawer.style.display === 'none' || !drawer.style.display;
+  drawer.style.display = isHidden ? 'block' : 'none';
+  const btn = document.getElementById('btn-toggle-adv-filters');
+  if (btn) {
+    if (isHidden) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  }
+}
+
+function resetAdvancedFilters() {
+  const fIntent = document.getElementById('filter-intent');
+  const fAge = document.getElementById('filter-age');
+  const fQuality = document.getElementById('filter-quality');
+  const fVerified = document.getElementById('filter-verified');
+  if (fIntent) fIntent.value = 'all';
+  if (fAge) fAge.value = '7';
+  if (fQuality) fQuality.value = 'all';
+  if (fVerified) fVerified.value = 'all';
+  updateAdvFiltersBadge();
+  loadLeads();
+}
+
+function updateAdvFiltersBadge() {
+  const fIntent = document.getElementById('filter-intent')?.value || 'all';
+  const fAge = document.getElementById('filter-age')?.value || '7';
+  const fQuality = document.getElementById('filter-quality')?.value || 'all';
+  const fVerified = document.getElementById('filter-verified')?.value || 'all';
+
+  let activeCount = 0;
+  if (fIntent !== 'all') activeCount++;
+  if (fAge !== '7') activeCount++;
+  if (fQuality !== 'all') activeCount++;
+  if (fVerified !== 'all') activeCount++;
+
+  const badge = document.getElementById('adv-filter-count-badge');
+  if (badge) {
+    if (activeCount > 0) {
+      badge.innerText = activeCount;
+      badge.style.display = 'inline-block';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
 }
 
 function renderLeads(leads) {
@@ -3177,8 +3237,9 @@ function renderMapsLeadCard(lead) {
     const rawPhone = lead.phone || '';
     const cleanDigits = rawPhone.replace(/[^\d+]/g, '');
 
-    // Formatted WhatsApp URL with pre-filled pitch
-    const encodedWaPitch = encodeURIComponent(lead.ai_whatsapp_pitch || `Hi ${lead.business_name}, saw your Google Maps listing in ${lead.city}!`);
+    // Formatted WhatsApp URL with viral pattern-break outreach pitch
+    const viralWaMsg = buildViralOutreachMessage(lead, 'outbound');
+    const encodedWaPitch = encodeURIComponent(viralWaMsg);
     const waUrl = lead.whatsapp_url 
       ? `${lead.whatsapp_url}?text=${encodedWaPitch}` 
       : (cleanDigits ? `https://wa.me/${cleanDigits.replace(/^\+/, '')}?text=${encodedWaPitch}` : '#');
@@ -3428,12 +3489,12 @@ function openMapsPitchModal(leadId) {
 
   // Fallbacks to generic AI pitches if needed
   if (!v1.rx) v1.rx = lead.ai_email_pitch || `${niche.name} Growth Blueprint being synthesized...`;
-  if (!v1.wa) v1.wa = lead.ai_whatsapp_pitch || 'Generating WhatsApp pitch...';
+  v1.wa = buildViralOutreachMessage(lead, 'outbound');
   if (!v1.call) v1.call = lead.ai_call_script || 'Generating call script...';
   if (!v1.email) v1.email = lead.ai_email_pitch || v1.rx;
 
   if (!v2.rx) v2.rx = v1.rx;
-  if (!v2.wa) v2.wa = v1.wa;
+  v2.wa = buildViralOutreachMessage(lead, 'inbound');
   if (!v2.call) v2.call = v1.call;
   if (!v2.email) v2.email = v1.email;
 
@@ -3913,8 +3974,11 @@ function renderScorecardCards(leads) {
 
     const cleanPhone = (l.phone || '').replace(/[^\d+]/g, '');
     const cleanDigits = cleanPhone.replace(/^\+/, '');
-    const waFollowup = encodeURIComponent(`Hello Dr. ${l.contact_person}, I saw you completed our Digital Health Assessment for ${l.business_name} (Score: ${l.overall_score}/100).\n\nWe have prepared your personalized AI Avatar sample and custom Reels roadmap. Would you have 10 minutes this week for a quick briefing?`);
+    const defaultScenario = (l.source === 'scorecard_test') ? 'inbound' : 'outbound';
+    const waMsg = buildViralOutreachMessage(l, defaultScenario);
+    const waFollowup = encodeURIComponent(waMsg);
     const waUrl = cleanDigits ? `https://wa.me/${cleanDigits}?text=${waFollowup}` : `https://web.whatsapp.com/send?text=${waFollowup}`;
+    const cleanCardName = getCleanSalutation(l);
 
     return `
       <div class="lead-card" id="sc-card-${l.id}" style="border-top: 3px solid ${scoreColor};">
@@ -3923,7 +3987,7 @@ function renderScorecardCards(leads) {
             <div class="lead-author-avatar" style="background: rgba(6, 182, 212, 0.15); color: #38bdf8;">🩺</div>
             <div>
               <div class="lead-author-name" style="font-weight: 800; font-size: 1.05rem;">
-                ${l.contact_person}
+                ${cleanCardName}
               </div>
               <div class="lead-author-handle" style="color: #cbd5e1; font-weight: 600;">
                 ${l.business_name} • ${l.city || 'Local Area'}
@@ -3972,7 +4036,7 @@ function renderScorecardCards(leads) {
             <a href="${l.pdf_url || `/api/scorecard/leads/${l.id}/pdf`}" target="_blank" class="btn btn-sm btn-outline" style="border-color: #38bdf8; color: #38bdf8;" title="View Official Clinical PDF">
               <span>📄 ℞ PDF</span>
             </a>
-            <a href="${waUrl}" target="_blank" class="btn btn-sm btn-success">
+            <a href="${waUrl}" target="_blank" class="btn btn-sm btn-success" title="Open viral WhatsApp pitch">
               <span>💬 WhatsApp</span>
             </a>
             <button type="button" class="btn btn-sm btn-outline" onclick="triggerScorecardEmailActionById(${l.id})" title="Send personalized cold email pitch with scorecard">
@@ -3995,6 +4059,81 @@ function renderScorecardCards(leads) {
   }).join('');
 }
 
+function getCleanSalutation(lead) {
+  const isMed = ((lead.business_type || '') + ' ' + (lead.business_name || '')).toLowerCase().match(/dental|clinic|doctor|dentist|health|physician|surgeon|aesthetic/i);
+  let raw = (lead.contact_person || '').trim();
+  // Strip duplicate Dr./Doctor
+  raw = raw.replace(/^(?:dr\.?\s*|doctor\s*)+/i, '').trim();
+
+  const isGeneric = !raw || 
+    /^clinic director/i.test(raw) || 
+    /team$/i.test(raw) || 
+    raw.toLowerCase() === 'director' || 
+    raw.toLowerCase() === 'doctor' ||
+    raw.toLowerCase().includes('practice principal');
+
+  if (isGeneric) {
+    return isMed ? `Doctor & Practice Principal` : `${lead.business_name} Team`;
+  }
+  return isMed ? `Dr. ${raw}` : raw;
+}
+
+function buildViralOutreachMessage(lead, scenario = 'inbound') {
+  const salutation = getCleanSalutation(lead);
+  const pdfUrl = lead.pdf_url 
+    ? (lead.pdf_url.startsWith('http') ? lead.pdf_url : `https://crm.thedigitalfrog.com${lead.pdf_url}`)
+    : (lead.id ? `https://crm.thedigitalfrog.com/api/scorecard/leads/${lead.id}/pdf` : `https://crm.thedigitalfrog.com/scorecard`);
+
+  const interactiveUrl = lead.id ? `https://crm.thedigitalfrog.com/scorecard?report=${lead.id}` : `https://crm.thedigitalfrog.com/scorecard`;
+  const ratingText = lead.rating ? `${lead.rating}⭐ (${lead.reviews_count || 0} reviews)` : 'top-tier offline reputation';
+
+  if (scenario === 'inbound') {
+    // Scenario A: Inbound Self-Diagnostic (Lead submitted the test themselves on crm.thedigitalfrog.com/scorecard)
+    return `Hello ${salutation},
+
+Reviewing the clinical growth audit you just generated for ${lead.business_name} (Digital Score: ${lead.overall_score || 26}/100).
+
+Seeing that score on paper is usually an eye-opener: your offline reputation is exceptional, but digitally you are virtually invisible to the 80% of local patients researching procedure explanations on Instagram Reels & YouTube before booking.
+
+Patients in ${lead.city || 'your area'} aren't choosing better specialists — they're simply choosing the ones showing up on their feeds explaining procedures.
+
+📄 Here is your official Rx Growth Prescription:
+${pdfUrl}
+(Live Interactive Audit: ${interactiveUrl})
+
+Inside, we've mapped out:
+1. 3 Custom Viral Educational Hooks for ${lead.business_name}
+2. The AI Avatar Protocol: How we clone your likeness and voice from a single 2-minute phone recording to produce 15 educational Reels/month — without taking 1 minute away from your clinical schedule.
+
+I rendered a 40-second private test sample showing what your AI Video Clone looks and sounds like. Can I drop that 40-second preview right here for you to check out?
+
+— Suraj Jaiswal
+Founder, The Digital Frog
+📅 Calendar: https://topmate.io/isurajjaiswal`;
+  } else {
+    // Scenario B: Cold Outbound Lead Outreach (Discovered via Google Maps / Social)
+    return `Hello ${salutation},
+
+Quick question: why is a practice with ${ratingText} in ${lead.city || 'your area'} completely absent from local patient video feeds?
+
+While researching top specialists in ${lead.city || 'your area'}, I noticed a massive discrepancy: your clinical reputation is top-tier, but rival clinics with half your experience are winning high-ticket private cases simply because their doctors appear regularly on Instagram Reels and YouTube.
+
+We put together a private, confidential Rx Growth Prescription for ${lead.business_name}:
+📄 Official Rx Practice Audit:
+${pdfUrl}
+
+It diagnoses 3 critical patient leakage points and scripts 3 viral educational Reel concepts tailored specifically for your clinic.
+
+We also designed an AI Doctor Avatar protocol that produces 15 patient-education Reels a month in your authentic voice and likeness — from just a single 2-minute phone video, so you never sacrifice clinical hours to studio cameras.
+
+Would you be open to a 30-second preview of what your AI Avatar looks like?
+
+— Suraj Jaiswal
+Practice Growth Strategist, The Digital Frog
+📅 Calendar: https://topmate.io/isurajjaiswal`;
+  }
+}
+
 function openScorecardDetailModal(leadId) {
   const lead = allScorecardLeads.find(l => l.id === leadId);
   if (!lead) return;
@@ -4003,7 +4142,8 @@ function openScorecardDetailModal(leadId) {
   const modal = document.getElementById('modal-scorecard-detail');
   if (!modal) return;
 
-  document.getElementById('modal-sc-doctor-title').innerText = `${lead.contact_person} (${lead.business_name})`;
+  const cleanTitleName = getCleanSalutation(lead);
+  document.getElementById('modal-sc-doctor-title').innerText = `${cleanTitleName} (${lead.business_name})`;
   document.getElementById('modal-sc-meta').innerText = `${lead.business_type || 'Practice'} • ${lead.city || 'Local Area'} • Phone: ${lead.phone || 'N/A'} • Email: ${lead.email || 'N/A'}`;
 
   // Score badge & breakdown
@@ -4032,14 +4172,47 @@ function openScorecardDetailModal(leadId) {
   document.getElementById('modal-sc-status-select').value = lead.status || 'new';
   document.getElementById('modal-sc-notes-input').value = lead.notes || '';
 
-  // WhatsApp follow-up link
-  const cleanPhone = (lead.phone || '').replace(/[^\d+]/g, '');
-  const cleanDigits = cleanPhone.replace(/^\+/, '');
-  const waFollowup = encodeURIComponent(`Hello Dr. ${lead.contact_person}, I saw you completed our Digital Health Assessment for ${lead.business_name} (Score: ${lead.overall_score}/100).\n\nWe have prepared your personalized AI Avatar sample and custom Reels roadmap. Would you have 10 minutes this week for a quick briefing?`);
-  const waBtn = document.getElementById('modal-sc-wa-btn');
-  if (waBtn) {
-    waBtn.href = cleanDigits ? `https://wa.me/${cleanDigits}?text=${waFollowup}` : `https://web.whatsapp.com/send?text=${waFollowup}`;
+  // Setup Viral Hook Scenario Section
+  window.activeScorecardScenario = (lead.source === 'scorecard_test') ? 'inbound' : 'outbound';
+  
+  function updateScorecardModalViralUi() {
+    const sc = window.activeScorecardScenario || 'inbound';
+    const msg = buildViralOutreachMessage(lead, sc);
+    const preview = document.getElementById('modal-sc-viral-msg-preview');
+    if (preview) preview.value = msg;
+
+    const desc = document.getElementById('sc-scenario-desc');
+    if (desc) {
+      desc.innerText = sc === 'inbound'
+        ? 'Inbound copy: Cites self-test score & video absence wakeup call.'
+        : 'Outbound copy: Discrepancy pattern break (high rating vs zero Reels presence).';
+    }
+
+    const tabIn = document.getElementById('sc-tab-inbound');
+    const tabOut = document.getElementById('sc-tab-outbound');
+    if (tabIn && tabOut) {
+      if (sc === 'inbound') {
+        tabIn.classList.add('active');
+        tabOut.classList.remove('active');
+      } else {
+        tabOut.classList.add('active');
+        tabIn.classList.remove('active');
+      }
+    }
+
+    const cleanPhone = (lead.phone || '').replace(/[^\d+]/g, '');
+    const cleanDigits = cleanPhone.replace(/^\+/, '');
+    const encoded = encodeURIComponent(msg);
+    const waUrl = cleanDigits ? `https://wa.me/${cleanDigits}?text=${encoded}` : `https://web.whatsapp.com/send?text=${encoded}`;
+
+    const sendBtn = document.getElementById('modal-sc-viral-wa-send-btn');
+    if (sendBtn) sendBtn.href = waUrl;
+
+    const topWaBtn = document.getElementById('modal-sc-wa-btn');
+    if (topWaBtn) topWaBtn.href = waUrl;
   }
+  window.updateScorecardModalViralUi = updateScorecardModalViralUi;
+  updateScorecardModalViralUi();
 
   // PDF Link
   const pdfBtn = document.getElementById('modal-sc-pdf-btn');
@@ -4053,8 +4226,28 @@ function openScorecardDetailModal(leadId) {
     emailBtn.title = lead.email ? `Draft & send email pitch to ${lead.email}` : 'Enter recipient email and draft pitch';
   }
 
-  // Prescription text box
-  document.getElementById('modal-sc-rx-pre').innerText = lead.prescription_text || 'No prescription generated.';
+  // Prescription text box - ensure never blank
+  if (lead.prescription_text && lead.prescription_text !== 'No prescription generated.') {
+    document.getElementById('modal-sc-rx-pre').innerText = lead.prescription_text;
+  } else {
+    document.getElementById('modal-sc-rx-pre').innerText = 'Loading official prescription...';
+    fetch(`/api/scorecard/leads/${lead.id}/pdf`)
+      .then(() => fetch('/api/scorecard/leads'))
+      .then(r => r.json())
+      .then(leads => {
+        const updated = leads.find(l => l.id === lead.id);
+        if (updated && updated.prescription_text) {
+          lead.prescription_text = updated.prescription_text;
+          lead.pdf_url = updated.pdf_url;
+          document.getElementById('modal-sc-rx-pre').innerText = updated.prescription_text;
+          if (pdfBtn) pdfBtn.href = updated.pdf_url || `/api/scorecard/leads/${lead.id}/pdf`;
+          updateScorecardModalViralUi();
+        }
+      })
+      .catch(() => {
+        document.getElementById('modal-sc-rx-pre').innerText = 'Official clinical prescription ready. Click "View / Download ℞ PDF" above to review.';
+      });
+  }
 
   // Answers list
   let answersObj = {};
@@ -4079,6 +4272,21 @@ function openScorecardDetailModal(leadId) {
 
   modal.style.display = 'flex';
 }
+
+window.switchScorecardScenario = function(sc) {
+  window.activeScorecardScenario = sc;
+  if (typeof window.updateScorecardModalViralUi === 'function') {
+    window.updateScorecardModalViralUi();
+  }
+};
+
+window.copyCurrentScorecardViralMessage = async function() {
+  const preview = document.getElementById('modal-sc-viral-msg-preview');
+  if (preview && preview.value) {
+    await copyToClipboard(preview.value);
+    showLeadNotificationToast('📋 Copied!', 'Viral pattern-break message copied to clipboard.');
+  }
+};
 
 function closeScorecardDetailModal() {
   const modal = document.getElementById('modal-scorecard-detail');
