@@ -1716,7 +1716,7 @@ function renderLeadsCards(leads, container) {
             <div>
               <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">
                 ${escapeHtml(lead.author_name || 'Prospect')}
-                <span style="font-size: 0.78rem; color: #94a3b8; font-weight: normal; margin-left: 4px;">@${escapeHtml(lead.author_handle || 'user')}</span>
+                <span style="font-size: 0.78rem; color: #94a3b8; font-weight: normal; margin-left: 4px;">${escapeHtml(formatHandle(lead.author_handle))}</span>
               </div>
               <div style="font-size: 0.75rem; color: #94a3b8;">
                 ${lead.platform.toUpperCase()} • ${freshness}
@@ -1807,7 +1807,7 @@ function renderLeadsTable(leads, container) {
             <div class="table-avatar">${initial}</div>
             <div>
               <strong>${escapeHtml(lead.author_name || 'Prospect')}</strong>
-              <small class="text-dim">@${escapeHtml(lead.author_handle || 'user')}</small>
+              <small class="text-dim">${escapeHtml(formatHandle(lead.author_handle))}</small>
             </div>
           </div>
         </td>
@@ -2050,10 +2050,12 @@ function openActionModal(leadId, mode) {
   const text = document.getElementById('modal-text');
   const info = document.getElementById('modal-lead-info');
 
+  const displayHandle = formatHandle(lead.author_handle);
+
   info.innerHTML = `
     <div style="font-size: 0.85rem; margin-bottom: 0.75rem; line-height: 1.5; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.6rem 0.8rem;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-        <span><strong>Prospect:</strong> ${escapeHtml(lead.author_name || 'Prospect')} (@${escapeHtml(lead.author_handle || 'user')})</span>
+        <span><strong>Prospect:</strong> ${escapeHtml(lead.author_name || 'Prospect')} (${escapeHtml(displayHandle)})</span>
         <span style="background: var(--bg-surface); padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">${lead.platform.toUpperCase()}</span>
       </div>
       <div style="margin-top: 0.25rem;">
@@ -2079,10 +2081,14 @@ function openActionModal(leadId, mode) {
     let comment = lead.ai_comment || '';
     // If comment is missing or contains obsolete template boilerplate, regenerate on the fly
     const isObsolete = !comment ||
+      comment.includes('Most people overlook this exact leverage point') ||
+      comment.includes('Pattern break: the real unlock here') ||
+      comment.includes('wishing you great candidates for the project') ||
       comment.includes('domain, the bottleneck') ||
       comment.includes('Decoupled system architecture: keeping the core MVP strictly focused') ||
       comment.includes('Building with modular components and clean API integrations') ||
-      comment.includes('within $83 m');
+      comment.includes('within $83 m') ||
+      comment.includes('For builds under $150: keeping the core MVP');
 
     if (isObsolete) {
       text.value = 'Generating relatable, high-converting comment...';
@@ -2092,12 +2098,19 @@ function openActionModal(leadId, mode) {
       updateModalWordCount();
     }
   } else {
-    title.innerText = `Send 1-on-1 Direct Message to @${lead.author_handle}`;
+    title.innerText = `Send 1-on-1 Direct Message to ${displayHandle}`;
     label.innerText = 'Personalized Direct Message (Editable)';
     if (angleBar) angleBar.style.display = 'none';
     
     let dm = lead.last_dm || '';
-    const isObsoleteDm = !dm || dm.includes('Saw your note on paid acquisition') || dm.includes('streamline this workflow') || dm.includes('Happy to help optimize cart recovery');
+    const isObsoleteDm = !dm ||
+      dm.includes('streamline this workflow') ||
+      dm.includes('Saw your note on paid acquisition') ||
+      dm.includes('Saw your observation on Digital Marketing & Growth') ||
+      dm.includes('Happy to help optimize cart recovery') ||
+      dm.includes('We help brands streamline') ||
+      dm.includes('saw your post on threads! We help');
+
     if (isObsoleteDm) {
       text.value = 'Generating bespoke, relatable DM...';
       regenerateModalActionText();
@@ -2163,6 +2176,8 @@ async function regenerateModalActionText(angle = null) {
       text.value = generated;
       if (currentActionMode === 'engage') {
         lead.ai_comment = generated;
+      } else {
+        lead.last_dm = generated;
       }
       updateModalWordCount();
     }
@@ -2569,6 +2584,11 @@ async function saveSettings(event) {
   } catch (err) {
     alert(`Failed to save settings: ${err.message}`);
   }
+}
+
+function formatHandle(handle) {
+  if (!handle) return '@user';
+  return '@' + String(handle).replace(/^@+/, '');
 }
 
 function escapeHtml(str) {

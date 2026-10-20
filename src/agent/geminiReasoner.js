@@ -618,10 +618,18 @@ Return strictly valid JSON:
       return `Finding the right tech and growth cofounder is all about complementary execution velocity—one validating distribution and user feedback while the other ships MVPs. We build and architect full-stack automation and SaaS growth engines at The Digital Frog—always excited to connect with fellow founders and swap notes!`;
     }
 
-    // 9. Hiring Design Assistant / Graphic Designer / Banner Designer
-    if (text.includes('design assistant') || text.includes('graphic designer') || text.includes('banners') || text.includes('advertising graphics') || (text.includes('designer') && text.includes('budget'))) {
-      const budgetSnippet = budget ? ` for ${budget}` : '';
-      return `Creative bottlenecks get intense when project turnarounds pile up—having standardized Figma design components and clear batching briefs cuts revision rounds in half. We manage high-output creative systems and design workflows at The Digital Frog—wishing you great candidates for the project${budgetSnippet}!`;
+    // 9. Product Banners / Advertising Graphics / Freelance Design Work
+    if (text.includes('product banner') || text.includes('advertising graphic') || text.includes('banners') || text.includes('designs in total') || (text.includes('designer') && (text.includes('budget') || text.includes('designs') || text.includes('opportunity')))) {
+      const budgetSnippet = budget ? ` within ${budget}` : '';
+      if (angle === 'hook') {
+        return `For product banners, busy layouts hurt CTR—high-contrast product cutouts paired with a single polarized value hook drive 2x higher click-through. We design high-converting ad graphics at The Digital Frog${budgetSnippet}—available and happy to share our portfolio!`;
+      }
+      return `For high-converting product banners and ad graphics, strong visual contrast and a clear single-benefit headline drive 2x higher click-through than crowded layouts. We design conversion-first ad creatives and marketing assets at The Digital Frog${budgetSnippet}—available to knock out the designs and just sent you a DM with availability and portfolio samples!`;
+    }
+
+    // 10. Hiring Design Assistant / Agency Team Member
+    if (text.includes('design assistant') || (text.includes('designer') && text.includes('agency'))) {
+      return `Agency creative bottlenecks get intense when client turnarounds pile up—having standardized Figma component libraries cuts revision rounds in half. We manage high-output creative systems and design workflows at The Digital Frog—wishing you great candidates for the team!`;
     }
 
     // 10. Video Editing / Reels / Short Form Video
@@ -668,11 +676,18 @@ Return strictly valid JSON:
   _heuristicDMGen(lead, cleanNiche) {
     const clean = this._cleanPostText(lead.post_text || '');
     const { budget, location, businessEntity, text } = this._extractEntities(clean, lead.post_text);
-    const handle = lead.author_handle || (lead.author_name ? lead.author_name.split(' ')[0] : 'there');
+    const rawHandle = lead.author_handle || (lead.author_name ? lead.author_name.split(' ')[0] : 'there');
+    const handle = String(rawHandle).replace(/^@+/, '');
 
     // 1. Fired Developer / Unreliable Freelancer
     if (text.includes('fired') || (text.includes('bad') && text.includes('dev')) || text.includes('disappeared') || text.includes('ghosted') || text.includes('scammed') || text.includes('replacement developer')) {
       return `Saw your note on replacing your web developer, @${handle} — mid-project handovers are notoriously tricky because 90% of the friction comes from undocumented code or broken repo branches. We've stepped in to salvage and finish 20+ stalled builds at The Digital Frog. Put together a 10-point code transition checklist—happy to drop the link if you want to inspect it?`;
+    }
+
+    // 2. Product Banners / Advertising Graphics / Design Opportunity
+    if (text.includes('product banner') || text.includes('advertising graphic') || text.includes('banner') || text.includes('designs in total') || (text.includes('designer') && (text.includes('designs') || text.includes('budget') || text.includes('opportunity')))) {
+      const budgetSnippet = budget ? ` within your ${budget} budget` : '';
+      return `Hey @${handle}, saw your post looking for someone to create the product banners and advertising graphics${budgetSnippet}. We specialize in conversion-driven ad creatives and high-CTR product graphics at The Digital Frog and have immediate bandwidth to take this on remotely. Available to deliver the designs within 48 hours—happy to share our portfolio samples if you'd like to take a look!`;
     }
 
     // 2. Local Business with Online Ordering & UPI
