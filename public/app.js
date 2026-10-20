@@ -2077,9 +2077,15 @@ function openActionModal(leadId, mode) {
     if (angleBar) angleBar.style.display = 'flex';
 
     let comment = lead.ai_comment || '';
-    // If comment is bloated or contains legacy template junk, regenerate on the fly
-    if (!comment || comment.length > 180 || comment.includes('domain, the bottleneck') || comment.includes('The Digital Frog')) {
-      text.value = 'Generating crisp, high-converting comment...';
+    // If comment is missing or contains obsolete template boilerplate, regenerate on the fly
+    const isObsolete = !comment ||
+      comment.includes('domain, the bottleneck') ||
+      comment.includes('Decoupled system architecture: keeping the core MVP strictly focused') ||
+      comment.includes('Building with modular components and clean API integrations') ||
+      comment.includes('within $83 m');
+
+    if (isObsolete) {
+      text.value = 'Generating relatable, high-converting comment...';
       regenerateModalActionText();
     } else {
       text.value = comment;
@@ -2089,9 +2095,16 @@ function openActionModal(leadId, mode) {
     title.innerText = `Send 1-on-1 Direct Message to @${lead.author_handle}`;
     label.innerText = 'Personalized Direct Message (Editable)';
     if (angleBar) angleBar.style.display = 'none';
-    const firstName = lead.author_name ? lead.author_name.split(' ')[0] : 'there';
-    text.value = `Hey ${firstName}, saw your post on ${lead.platform}! We help brands streamline this workflow. Happy to share a quick checklist or test structure if you're exploring options!`;
-    updateModalWordCount();
+    
+    let dm = lead.last_dm || '';
+    const isObsoleteDm = !dm || dm.includes('Saw your note on paid acquisition') || dm.includes('streamline this workflow') || dm.includes('Happy to help optimize cart recovery');
+    if (isObsoleteDm) {
+      text.value = 'Generating bespoke, relatable DM...';
+      regenerateModalActionText();
+    } else {
+      text.value = dm;
+      updateModalWordCount();
+    }
   }
 
   modal.classList.add('open');
@@ -2108,11 +2121,11 @@ function updateModalWordCount() {
   const content = (text.value || '').trim();
   const words = content ? content.split(/\s+/).filter(Boolean).length : 0;
 
-  if (words <= 35) {
+  if (words <= 48) {
     badge.style.color = '#10b981';
     badge.style.background = 'rgba(16, 185, 129, 0.12)';
     badge.style.borderColor = 'rgba(16, 185, 129, 0.25)';
-    badge.innerText = `${words} words • Short & Crisp ✨`;
+    badge.innerText = `${words} words • High-Converting & Relatable ✨`;
   } else {
     badge.style.color = '#f59e0b';
     badge.style.background = 'rgba(245, 158, 11, 0.12)';
