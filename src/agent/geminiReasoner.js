@@ -111,6 +111,60 @@ export class GeminiReasoner {
   }
 
   /**
+   * Generates a dynamic, bespoke, relatable social comment for Google Maps / local leads.
+   * Strictly 2 sentences:
+   * 1. Genuinely reflects and relates to the post's actual message/caption/case study.
+   * 2. Demonstrates Suraj Jaiswal's / The Digital Frog's growth and clinical conversion authority.
+   */
+  async synthesizeSocialEngagementComment({ postText = '', businessName = '', category = '', city = '', platform = 'instagram' } = {}) {
+    const key = this.getApiKey();
+    if (key) {
+      try {
+        const prompt = `You are Suraj Jaiswal, Senior Growth Architect and Founder at The Digital Frog (AI Video Systems & Conversion Lead Engines).
+You are commenting on a recent ${platform} post from:
+Business: "${businessName}"
+Industry/Category: "${category || 'Local Practice'}"
+City: "${city || 'Local Area'}"
+
+Post Content / Message:
+"""
+${postText.slice(0, 800)}
+"""
+
+CRITICAL INSTRUCTIONS:
+1. Write a STRICTLY 2-SENTENCE comment (between 25 and 45 words).
+2. SENTENCE 1 (RELATABILITY & POST MESSAGE):
+   - You MUST read the post content above and specifically reflect on their actual message, patient recovery story, clinical procedure (e.g. implants, smile makeover, root canal, teeth whitening), customer review, team work, or local service.
+   - Absolutely NO generic openers ("Great work!", "Inspiring!", "Nice post!"). Talk like an observant, appreciative peer who actually read their post.
+3. SENTENCE 2 (SURAJ / THE DIGITAL FROG EXPERTISE):
+   - Weave in exactly one line showing hands-on authority at The Digital Frog (e.g., "At The Digital Frog, we've found that highlighting authentic patient transformations like this generates 5x higher consultation bookings than generic promos.", "At The Digital Frog, we build video patient acquisition funnels that turn word-of-mouth reputation into predictable high-ticket cases.").
+4. ZERO HARDSALE: No "DM me", no phone numbers, no links, no sales pitch.
+5. Return ONLY the raw comment text without quotes or markdown formatting.`;
+
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.4 }
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          text = text.replace(/^["']|["']$/g, '').trim();
+          if (text.length > 20) return text;
+        }
+      } catch (err) {
+        console.warn('[GeminiReasoner] Dynamic engagement comment via Gemini failed:', err.message);
+      }
+    }
+
+    return this._heuristicEngagementComment({ postText, businessName, category, city, platform });
+  }
+
+  /**
    * Generates consultative 1-on-1 DM for lead nurturing.
    */
   async synthesizeDM(lead, history = [], niche = 'Digital Marketing & Growth') {
@@ -750,6 +804,55 @@ Return strictly valid JSON:
       image_prompt: 'Futuristic digital commerce concept, glowing geometric analytics, clean aesthetic, dark backdrop',
       hashtags: ['automation', 'saas', 'growth', 'business']
     };
+  }
+
+  _heuristicEngagementComment({ postText = '', businessName = '', category = '', city = '', platform = 'instagram' }) {
+    const raw = String(postText || '').toLowerCase();
+    const cleanBiz = businessName || 'your practice';
+    const cleanCity = city || 'the area';
+
+    // 1. Patient Reviews, Testimonials, Family Stories (Mother, Father, Patient Experience)
+    if (raw.includes('patient') || raw.includes('review') || raw.includes('feedback') || raw.includes('experience') || raw.includes('mother') || raw.includes('father') || raw.includes('testimonial') || raw.includes('happy patient') || raw.includes('glowing review')) {
+      const nameMatch = postText.match(/(?:mr\.|mrs\.|ms\.)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i) || postText.match(/patient\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
+      const nameSnippet = nameMatch ? `from ${nameMatch[0].trim()}` : 'from real patients';
+      return `Seeing authentic feedback ${nameSnippet} highlights the deep clinical trust and standard of care ${cleanBiz} has earned in ${cleanCity}. At The Digital Frog, we've found that real patient recovery stories generate 5x higher consultation bookings than standard clinic promos.`;
+    }
+
+    // 2. Home Services / Trade Services (Plumbing, HVAC, Electrical, Roofing, Contractors, Leak Detection)
+    if (raw.includes('plumb') || raw.includes('leak') || raw.includes('pipe') || raw.includes('drain') || raw.includes('water heater') || raw.includes('hvac') || raw.includes('ac ') || raw.includes('roof') || raw.includes('drywall') || (raw.includes('emergency') && (raw.includes('burst') || raw.includes('repair') || raw.includes('service')))) {
+      return `Prompt diagnostic precision and transparent craftsmanship are what set standout trade professionals apart in ${cleanCity}. At The Digital Frog, we build hyper-targeted local customer acquisition funnels that turn word-of-mouth excellence into predictable booking pipelines.`;
+    }
+
+    // 3. Dental Implants, Restorative Surgery, Extractions
+    if (raw.includes('implant') || raw.includes('surgery') || raw.includes('extraction') || raw.includes('restoration') || raw.includes('bone graft') || raw.includes('prostho')) {
+      return `Complex restorative and implant cases demand meticulous surgical precision and deep patient reassurance—exceptional clinical standard here. At The Digital Frog, we build video patient acquisition funnels—showcasing real procedural excellence like this is the highest-converting asset for high-ticket cases.`;
+    }
+
+    // 4. Cosmetic Dentistry, Smile Makeover, Aligners, Veneers, Teeth Whitening
+    if (raw.includes('smile') || raw.includes('makeover') || raw.includes('aligner') || raw.includes('invisalign') || raw.includes('veneer') || raw.includes('whitening') || raw.includes('aesthetic') || raw.includes('transformation') || raw.includes('before and after')) {
+      return `The natural aesthetics and shade alignment on this smile transformation are outstanding—great attention to detail by the ${cleanBiz} team. At The Digital Frog, we engineer video conversion funnels for aesthetic practices—authentic before-and-after cases consistently drive the strongest patient demand.`;
+    }
+
+    // 5. Root Canal, Pain Relief, Endodontic, Dental Emergency
+    if (raw.includes('root canal') || raw.includes('toothache') || raw.includes('endodontic') || raw.includes('cavity') || raw.includes('filling') || ((raw.includes('pain') || raw.includes('emergency')) && (raw.includes('dent') || raw.includes('tooth') || raw.includes('teeth') || raw.includes('oral') || raw.includes('clinic')))) {
+      return `Providing prompt, pain-free relief during acute dental emergencies is what creates lifelong patient loyalty in ${cleanCity}. At The Digital Frog, we help top practices communicate their gentle clinical approach through video systems that convert anxious searchers into confirmed visits.`;
+    }
+
+    // 6. Clinic Environment, Technology, 3D Scans, Hygiene, Team
+    if (raw.includes('clinic') || raw.includes('environment') || raw.includes('hygiene') || raw.includes('sterilization') || raw.includes('team') || raw.includes('technology') || raw.includes('laser') || raw.includes('scanner') || raw.includes('3d') || raw.includes('cbct')) {
+      return `Investing in state-of-the-art diagnostic technology and a calming patient environment makes all the difference for clinical outcomes in ${cleanCity}. At The Digital Frog, we turn advanced clinical infrastructure into compelling patient education systems that drive high-value cases.`;
+    }
+
+    // 7. Food, Dining, Restaurant, Cafe, Bakery
+    if (raw.includes('food') || raw.includes('dish') || raw.includes('menu') || raw.includes('bakery') || raw.includes('taste') || raw.includes('chef') || raw.includes('coffee') || raw.includes('dining')) {
+      return `The presentation and passion behind this are fantastic—wonderful to see local culinary excellence flourishing in ${cleanCity}. At The Digital Frog, we build high-converting conversion funnels that help standout local businesses scale their repeat customer velocity.`;
+    }
+
+    // 8. General Bespoke Fallback using meaningful phrases from the post
+    const cleanExcerpt = postText.replace(/#\S+/g, '').replace(/[^\w\s,.!?-]/g, '').trim().split(/\s+/).slice(0, 10).join(' ');
+    const contextSnippet = cleanExcerpt.length > 15 ? `regarding "${cleanExcerpt}..."` : `in ${cleanCity}`;
+
+    return `The focus on quality and client care ${contextSnippet} sets a high benchmark for professionalism in ${cleanCity}. At The Digital Frog, we engineer growth and AI video systems that turn genuine local excellence into predictable inbound client flow.`;
   }
 }
 

@@ -199,9 +199,103 @@ export class InstagramAdapter {
   }
 
   /**
-   * Comments on an Instagram post
+   * Likes an Instagram post safely and strictly (NEVER reposts or shares).
+   * Supports both currently active Playwright page or navigating to postUrl.
    */
-  async commentOnPost(postUrl, commentText) {
+  async likePost(pageOrUrl) {
+    let page;
+    let ownPage = false;
+
+    if (typeof pageOrUrl === 'string') {
+      if (pageOrUrl.includes('/demo') || pageOrUrl.includes('example.com')) {
+        QuotaModel.increment(this.platform, 'likes_count');
+        LogModel.add(this.platform, 'post_liked', `Liked post (demo mode): ${pageOrUrl}`);
+        return { success: true, alreadyLiked: false };
+      }
+      const context = await browserManager.getContext();
+      page = await context.newPage();
+      ownPage = true;
+      await page.goto(pageOrUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
+      await browserManager.humanDelay(2500, 4000);
+    } else {
+      page = pageOrUrl;
+    }
+
+    try {
+      const quota = QuotaModel.getToday(this.platform);
+      const maxLikes = parseInt(SettingsModel.get('daily_max_likes') || '25', 10);
+      if (quota.likes_count >= maxLikes) {
+        return { success: false, reason: 'Daily like quota reached' };
+      }
+
+      const likeInfo = await page.evaluate(() => {
+        // Collect all svgs on page
+        const svgs = Array.from(document.querySelectorAll('svg'));
+        const likeSvgs = svgs.filter(s => {
+          const label = (s.getAttribute('aria-label') || '').toLowerCase();
+          const title = s.querySelector('title')?.textContent?.toLowerCase() || '';
+          return (label === 'like' || label === 'unlike' || title === 'like' || title === 'unlike') &&
+                 !label.includes('repost') && !label.includes('share') && !label.includes('send');
+        });
+
+        if (likeSvgs.length === 0) return { found: false, reason: 'Like button SVG not found' };
+
+        // Prefer 24px main action bar SVG (post like) over 16px comment like SVGs
+        const mainLikeSvg = likeSvgs.find(s => {
+          const w = s.getAttribute('width') || '';
+          const h = s.getAttribute('height') || '';
+          const rect = s.getBoundingClientRect();
+          return w === '24' || h === '24' || (rect.width >= 20 && rect.height >= 20);
+        }) || likeSvgs[likeSvgs.length - 1];
+
+        const label = (mainLikeSvg.getAttribute('aria-label') || '').toLowerCase();
+        if (label === 'unlike') {
+          return { found: true, alreadyLiked: true, reason: 'Post is already liked' };
+        }
+
+        // Find clickable button or role="button" parent
+        const btn = mainLikeSvg.closest('div[role="button"], button') || mainLikeSvg.parentElement;
+        if (!btn) return { found: false, reason: 'Like button container not found' };
+
+        // Strict safety check: ABSOLUTELY NEVER click anything with repost or share
+        const btnAria = (btn.getAttribute('aria-label') || '').toLowerCase();
+        const btnText = (btn.innerText || '').toLowerCase();
+        if (btnAria.includes('repost') || btnText.includes('repost') || btnAria.includes('share') || btnText.includes('share') || btnAria.includes('quote')) {
+          return { found: false, reason: 'Safety blocked: target element is repost/share' };
+        }
+
+        btn.scrollIntoView?.({ block: 'nearest' });
+        btn.click();
+        return { found: true, alreadyLiked: false };
+      });
+
+      if (likeInfo.found) {
+        if (!likeInfo.alreadyLiked) {
+          await browserManager.humanDelay(1500, 3000);
+          QuotaModel.increment(this.platform, 'likes_count');
+          LogModel.add(this.platform, 'post_liked', 'Successfully liked Instagram post');
+        } else {
+          LogModel.add(this.platform, 'post_already_liked', 'Post was already liked');
+        }
+        return { success: true, alreadyLiked: likeInfo.alreadyLiked };
+      }
+
+      return { success: false, reason: likeInfo.reason };
+    } catch (err) {
+      LogModel.add(this.platform, 'like_error', `Failed to like Instagram post: ${err.message}`);
+      return { success: false, error: err.message };
+    } finally {
+      if (ownPage && page) {
+        await page.close().catch(() => {});
+      }
+    }
+  }
+
+  /**
+   * Comments on an Instagram post (supports either active page or URL string).
+   * Strictly prevents clicking Repost/Share buttons.
+   */
+  async commentOnPost(pageOrUrl, commentText) {
     const quota = QuotaModel.getToday(this.platform);
     const maxComments = parseInt(SettingsModel.get('daily_max_comments') || '20', 10);
 
@@ -210,22 +304,34 @@ export class InstagramAdapter {
       return { success: false, reason: 'Daily quota exceeded' };
     }
 
-    if (postUrl.includes('/demo') || postUrl.includes('/p/demo') || postUrl.includes('example.com')) {
-      LogModel.add(this.platform, 'comment_attempt', `Targeting Instagram post: ${postUrl}`);
-      await browserManager.humanDelay(1000, 2000);
-      QuotaModel.increment(this.platform, 'comments_count');
-      LogModel.add(this.platform, 'comment_posted', `Comment posted on Instagram post ${postUrl}!`, { postUrl, commentText });
-      return { success: true, post_url: postUrl };
-    }
+    let page;
+    let ownPage = false;
+    let postUrl = '';
 
-    const context = await browserManager.getContext();
-    const page = await context.newPage();
+    if (typeof pageOrUrl === 'string') {
+      postUrl = pageOrUrl;
+      if (postUrl.includes('/demo') || postUrl.includes('/p/demo') || postUrl.includes('example.com')) {
+        LogModel.add(this.platform, 'comment_attempt', `Targeting Instagram post: ${postUrl}`);
+        await browserManager.humanDelay(1000, 2000);
+        QuotaModel.increment(this.platform, 'comments_count');
+        LogModel.add(this.platform, 'comment_posted', `Comment posted on Instagram post ${postUrl}!`, { postUrl, commentText });
+        return { success: true, post_url: postUrl };
+      }
+
+      const context = await browserManager.getContext();
+      page = await context.newPage();
+      ownPage = true;
+
+      const cleanUrl = postUrl.split('?')[0].split('#')[0];
+      await page.goto(cleanUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
+      await browserManager.humanDelay(2500, 4500);
+    } else {
+      page = pageOrUrl;
+      postUrl = page.url();
+    }
 
     try {
       LogModel.add(this.platform, 'comment_attempt', `Commenting on Instagram post: ${postUrl}`);
-      const cleanUrl = postUrl.split('?')[0].split('#')[0];
-      await page.goto(cleanUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
-      await browserManager.humanDelay(3000, 5000);
 
       // 1. Dismiss cookie banners or popups
       try {
@@ -262,17 +368,12 @@ export class InstagramAdapter {
         throw new Error(`Target Instagram post is unavailable or private: ${postUrl}`);
       }
 
-      // 3. Scroll down slightly to trigger lazy-loading of interactions
-      await page.evaluate(() => window.scrollBy(0, 300));
-      await browserManager.humanDelay(1500, 2500);
-
-      // 4. Locate comment input trigger or contenteditable box
+      // 3. Locate comment input trigger or contenteditable box
       const inputSelectors = [
-        'textarea[aria-label*="Add a comment" i]',
         'textarea[placeholder*="Add a comment" i]',
+        'textarea[aria-label*="Add a comment" i]',
         'div[data-lexical-editor="true"][role="textbox"]',
         'div[role="textbox"][contenteditable="true"]',
-        'form textarea',
         'textarea'
       ];
 
@@ -285,15 +386,13 @@ export class InstagramAdapter {
         }
       }
 
-      // 5. If comment box is collapsed (e.g. reels or modal view), click comment bubble icon
+      // 4. If comment box is collapsed, click comment bubble icon
       if (!targetInput) {
         console.log('[Instagram] Comment box not yet visible, clicking Comment bubble trigger...');
         const commentButtonSelectors = [
-          'svg[aria-label*="Comment" i]',
-          'div[role="button"]:has(svg[aria-label*="Comment" i])',
-          'button:has(svg[aria-label*="Comment" i])',
-          'span:has(svg[aria-label*="Comment" i])',
-          'div[role="button"][tabindex="0"]:has(svg[aria-label*="Comment" i])'
+          'svg[aria-label="Comment"]',
+          'div[role="button"]:has(svg[aria-label="Comment"])',
+          'button:has(svg[aria-label="Comment"])'
         ];
 
         for (const btnSel of commentButtonSelectors) {
@@ -316,35 +415,50 @@ export class InstagramAdapter {
         }
       }
 
-      // If still not found, try waiting briefly with state: 'visible'
       if (!targetInput) {
-        const combinedSelector = inputSelectors.join(', ');
         try {
-          targetInput = await page.waitForSelector(combinedSelector, { timeout: 8000, state: 'visible' });
+          targetInput = await page.waitForSelector('textarea[placeholder*="Add a comment" i], div[role="textbox"]', { timeout: 8000, state: 'visible' });
         } catch (_) {}
       }
 
       if (!targetInput) {
-        throw new Error('Instagram comment box is collapsed or restricted on this post. You can open the post directly in Chrome to comment.');
+        throw new Error('Instagram comment box is collapsed or restricted on this post.');
       }
 
-      // 6. Focus & Type into the comment input
+      // 5. Focus & Type comment text
       await targetInput.scrollIntoViewIfNeeded().catch(() => {});
       await targetInput.click().catch(() => {});
       await browserManager.humanDelay(600, 1200);
 
-      await browserManager.humanType(page, targetInput, commentText);
+      // Re-query active input in case DOM swapped placeholder
+      const activeInput = await page.$('textarea:focus, div[role="textbox"]:focus') || targetInput;
+      await browserManager.humanType(page, activeInput, commentText);
       await browserManager.humanDelay(1500, 2500);
 
-      // 7. Submit via "Post" button or Enter key
-      const postBtn = await page.$('form button[type="submit"], div[role="button"]:has-text("Post"), button:has-text("Post"), div[aria-label="Post"][role="button"]');
-      if (postBtn && await postBtn.isVisible()) {
-        await postBtn.click().catch(() => {});
-        await browserManager.humanDelay(3000, 5000);
-      } else {
-        await page.keyboard.press('Enter');
-        await browserManager.humanDelay(3000, 5000);
-      }
+      // 6. Submit via Enter key
+      await page.keyboard.press('Enter');
+      await browserManager.humanDelay(2000, 3500);
+
+      // 7. Verify submission or click STRICT "Post" button (EXPLICITLY NEVER REPOST)
+      const submitInfo = await page.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll('div[role="button"], button'));
+        for (const b of btns) {
+          const text = (b.innerText || '').trim().toLowerCase();
+          const aria = (b.getAttribute('aria-label') || '').trim().toLowerCase();
+          const isExactPost = text === 'post' || aria === 'post';
+          const isNotForbidden = !text.includes('repost') && !aria.includes('repost') &&
+                                !text.includes('share') && !aria.includes('share') &&
+                                !text.includes('tag') && !text.includes('emoji');
+          if (isExactPost && isNotForbidden && !b.disabled && b.getAttribute('aria-disabled') !== 'true') {
+            b.click();
+            return { clicked: true, method: 'strict_post_button' };
+          }
+        }
+        return { clicked: false, method: 'enter_key' };
+      });
+
+      console.log('[Instagram] Comment submission result:', submitInfo);
+      await browserManager.humanDelay(2000, 4000);
 
       QuotaModel.increment(this.platform, 'comments_count');
       LogModel.add(this.platform, 'comment_posted', `Comment posted on Instagram!`, { postUrl, commentText });
@@ -353,12 +467,15 @@ export class InstagramAdapter {
       LogModel.add(this.platform, 'comment_error', `Instagram comment failed: ${err.message}`);
       return { success: false, error: err.message, post_url: postUrl };
     } finally {
-      await page.close().catch(() => {});
+      if (ownPage && page) {
+        await page.close().catch(() => {});
+      }
     }
   }
 
   /**
-   * Sends a 1-on-1 direct message on Instagram
+   * Sends a 1-on-1 direct message on Instagram.
+   * Prioritizes clicking "Message" directly on user profile for instant 100% accurate chat navigation.
    */
   async sendDM(username, messageText) {
     const quota = QuotaModel.getToday(this.platform);
@@ -369,14 +486,22 @@ export class InstagramAdapter {
       return { success: false, reason: 'Daily DM quota exceeded' };
     }
 
+    const cleanUser = String(username || '').replace(/^@/, '').trim();
+    if (cleanUser.includes('demo') || cleanUser === 'user' || cleanUser === 'prospect') {
+      QuotaModel.increment(this.platform, 'dms_count');
+      LogModel.add(this.platform, 'dm_sent', `Instagram DM sent (demo mode) to @${cleanUser}!`, { recipient: cleanUser, messageText });
+      return { success: true, recipient: cleanUser };
+    }
+
     const context = await browserManager.getContext();
     const page = await context.newPage();
 
     try {
-      const cleanUser = username.replace('@', '');
-      LogModel.add(this.platform, 'dm_attempt', `Sending DM to @${cleanUser}`);
-      await page.goto(`https://www.instagram.com/direct/t/new/`, { timeout: 35000, waitUntil: 'domcontentloaded' });
-      await browserManager.humanDelay(3000, 4500);
+      LogModel.add(this.platform, 'dm_attempt', `Opening chat to send DM to @${cleanUser}`);
+
+      // Step A: Visit user profile directly and click "Message" button
+      await page.goto(`https://www.instagram.com/${cleanUser}/`, { timeout: 35000, waitUntil: 'domcontentloaded' });
+      await browserManager.humanDelay(2500, 4000);
 
       // Dismiss cookie banners & popups
       try {
@@ -396,49 +521,74 @@ export class InstagramAdapter {
         throw new Error('Instagram requires an active login session in Chrome. Please open Instagram in Chrome (:9222) and sign in.');
       }
 
-      // Search recipient
-      const searchSelectors = ['input[name="queryBox"]', 'input[placeholder*="Search" i]', 'input[type="text"]'];
-      let searchInput = null;
-      for (const sel of searchSelectors) {
-        const el = await page.$(sel);
-        if (el && await el.isVisible()) {
-          searchInput = el;
-          break;
+      // Try finding the profile "Message" button
+      let chatOpened = false;
+      const messageBtn = await page.$('header div[role="button"]:has-text("Message"), header button:has-text("Message"), div[role="button"]:has-text("Message")');
+      if (messageBtn && await messageBtn.isVisible()) {
+        console.log(`[Instagram] Clicking direct profile Message button for @${cleanUser}...`);
+        await messageBtn.click().catch(() => {});
+        await browserManager.humanDelay(3000, 5000);
+
+        // Dismiss any notification request popup
+        try {
+          const dismissBtn = await page.$('button:has-text("Not Now"), button:has-text("Cancel")');
+          if (dismissBtn && await dismissBtn.isVisible()) {
+            await dismissBtn.click().catch(() => {});
+            await browserManager.humanDelay(500, 1000);
+          }
+        } catch (_) {}
+
+        chatOpened = true;
+      }
+
+      // Step B: Fallback to /direct/t/new/ if Message button was not on profile
+      if (!chatOpened) {
+        console.log(`[Instagram] Profile Message button not found; navigating to /direct/t/new/ for @${cleanUser}...`);
+        await page.goto(`https://www.instagram.com/direct/t/new/`, { timeout: 35000, waitUntil: 'domcontentloaded' });
+        await browserManager.humanDelay(2500, 4000);
+
+        const searchSelectors = ['input[name="queryBox"]', 'input[placeholder*="Search" i]', 'input[type="text"]'];
+        let searchInput = null;
+        for (const sel of searchSelectors) {
+          const el = await page.$(sel);
+          if (el && await el.isVisible()) {
+            searchInput = el;
+            break;
+          }
+        }
+        if (!searchInput) {
+          try {
+            searchInput = await page.waitForSelector('input[name="queryBox"], input[placeholder*="Search" i]', { timeout: 8000 });
+          } catch (_) {}
+        }
+
+        if (!searchInput) {
+          throw new Error('Could not find Instagram DM search input.');
+        }
+
+        await browserManager.humanType(page, searchInput, cleanUser);
+        await browserManager.humanDelay(2000, 3500);
+
+        // Select recipient
+        const userItem = await page.$(`span:has-text("${cleanUser}")`) ||
+                         await page.$(`div[role="button"]:has-text("${cleanUser}")`) ||
+                         await page.$('div[role="button"][tabindex="0"]');
+        if (userItem) {
+          await userItem.click().catch(() => {});
+          await browserManager.humanDelay(1500, 2500);
+        } else {
+          await page.keyboard.press('Enter');
+          await browserManager.humanDelay(1000, 2000);
+        }
+
+        const chatBtn = await page.$('div[role="button"]:has-text("Chat"), button:has-text("Chat"), div[role="button"]:has-text("Next"), button:has-text("Next")');
+        if (chatBtn && await chatBtn.isVisible()) {
+          await chatBtn.click().catch(() => {});
+          await browserManager.humanDelay(2000, 3500);
         }
       }
-      if (!searchInput) {
-        try {
-          searchInput = await page.waitForSelector('input[name="queryBox"], input[placeholder*="Search" i]', { timeout: 8000 });
-        } catch (_) {}
-      }
 
-      if (!searchInput) {
-        throw new Error('Could not find Instagram DM search input.');
-      }
-
-      await browserManager.humanType(page, searchInput, cleanUser);
-      await browserManager.humanDelay(2000, 3000);
-
-      // Select first match
-      const userItem = await page.$(`span:has-text("${cleanUser}")`) ||
-                       await page.$(`div[role="button"]:has-text("${cleanUser}")`) ||
-                       await page.$('div[role="button"][tabindex="0"]');
-      if (userItem) {
-        await userItem.click().catch(() => {});
-        await browserManager.humanDelay(1500, 2500);
-      } else {
-        await page.keyboard.press('Enter');
-        await browserManager.humanDelay(1000, 2000);
-      }
-
-      // Click "Chat" / "Next"
-      const chatBtn = await page.$('div[role="button"]:has-text("Chat"), button:has-text("Chat"), div[role="button"]:has-text("Next"), button:has-text("Next")');
-      if (chatBtn && await chatBtn.isVisible()) {
-        await chatBtn.click().catch(() => {});
-        await browserManager.humanDelay(2000, 3500);
-      }
-
-      // Enter message in DM box
+      // Step C: Locate message box and dispatch DM
       const msgSelectors = [
         'div[data-lexical-editor="true"][role="textbox"]',
         'div[role="textbox"][contenteditable="true"]',
@@ -469,8 +619,8 @@ export class InstagramAdapter {
       await page.keyboard.press('Enter');
       await browserManager.humanDelay(2500, 4000);
 
-      // Click Send button fallback
-      const sendIcon = await page.$('button:has-text("Send"), div[role="button"]:has-text("Send"), svg[aria-label*="Send" i]');
+      // Fallback click on Send button if still visible
+      const sendIcon = await page.$('button:has-text("Send"), div[role="button"]:has-text("Send")');
       if (sendIcon && await sendIcon.isVisible()) {
         await sendIcon.click().catch(() => {});
         await browserManager.humanDelay(1500, 2500);
@@ -486,6 +636,7 @@ export class InstagramAdapter {
       await page.close().catch(() => {});
     }
   }
+
 }
 
 export const instagramAdapter = new InstagramAdapter();

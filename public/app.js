@@ -4903,12 +4903,19 @@ async function engageSingleSocialLead(leadId) {
     });
     const data = await res.json();
     if (data.success) {
-      appendTerminalLog(`✅ Social engagement complete for ${name}! DM dispatched with Scorecard link.`, 'text-emerald');
-      showLeadNotificationToast('✅ Social Engaged', `Successfully completed 3-step outreach for ${name}.`);
+      appendTerminalLog(`✅ Social engagement complete for ${name}!`, 'text-emerald');
+      if (data.dynamicComment) {
+        appendTerminalLog(`💬 Bespoke Comment: "${data.dynamicComment}"`, 'text-cyan');
+      }
+      if (data.scorecardUrl) {
+        appendTerminalLog(`🔗 Audit Scorecard Delivered: ${data.scorecardUrl}`, 'text-emerald');
+      }
+      showLeadNotificationToast('✅ Social Engaged', `Successfully liked, commented & sent audit link to ${name}.`);
       loadMapsLeads();
     } else {
-      appendTerminalLog(`Social engagement error for ${name}: ${data.error || data.message}`, 'text-danger');
-      alert(`Social engagement notice: ${data.error || data.message}`);
+      const errReason = data.error || data.message || data.reason || data.dmError || 'Engagement halted';
+      appendTerminalLog(`Social engagement note for ${name}: ${errReason}`, 'text-amber');
+      alert(`Social Engagement Notice: ${errReason}`);
     }
   } catch (err) {
     appendTerminalLog(`Social engagement network error: ${err.message}`, 'text-danger');

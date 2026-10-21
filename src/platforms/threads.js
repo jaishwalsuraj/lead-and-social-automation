@@ -140,9 +140,92 @@ export class ThreadsAdapter {
   }
 
   /**
+   * Likes a Threads post strictly and safely (NEVER clicks Repost or Quote).
+   */
+  async likePost(pageOrUrl) {
+    let page;
+    let ownPage = false;
+
+    if (typeof pageOrUrl === 'string') {
+      if (pageOrUrl.includes('/demo') || pageOrUrl.includes('example.com')) {
+        QuotaModel.increment(this.platform, 'likes_count');
+        LogModel.add(this.platform, 'post_liked', `Liked Threads post (demo mode): ${pageOrUrl}`);
+        return { success: true, alreadyLiked: false };
+      }
+      const context = await browserManager.getContext();
+      page = await context.newPage();
+      ownPage = true;
+      const targetUrl = pageOrUrl.replace('threads.net', 'threads.com');
+      await page.goto(targetUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
+      await browserManager.humanDelay(2500, 4000);
+    } else {
+      page = pageOrUrl;
+    }
+
+    try {
+      const quota = QuotaModel.getToday(this.platform);
+      const maxLikes = parseInt(SettingsModel.get('daily_max_likes') || '25', 10);
+      if (quota.likes_count >= maxLikes) {
+        return { success: false, reason: 'Daily like quota reached' };
+      }
+
+      const likeInfo = await page.evaluate(() => {
+        const svgs = Array.from(document.querySelectorAll('svg'));
+        const likeSvgs = svgs.filter(s => {
+          const label = (s.getAttribute('aria-label') || '').toLowerCase();
+          const title = s.querySelector('title')?.textContent?.toLowerCase() || '';
+          return (label === 'like' || label === 'unlike' || title === 'like' || title === 'unlike') &&
+                 !label.includes('repost') && !label.includes('quote') && !label.includes('share');
+        });
+
+        if (likeSvgs.length === 0) return { found: false, reason: 'No Threads like SVG found' };
+
+        const mainLikeSvg = likeSvgs[0];
+        const label = (mainLikeSvg.getAttribute('aria-label') || '').toLowerCase();
+        if (label === 'unlike') {
+          return { found: true, alreadyLiked: true, reason: 'Post is already liked' };
+        }
+
+        const btn = mainLikeSvg.closest('div[role="button"], button') || mainLikeSvg.parentElement;
+        if (!btn) return { found: false, reason: 'Like button container not found' };
+
+        const btnAria = (btn.getAttribute('aria-label') || '').toLowerCase();
+        const btnText = (btn.innerText || '').toLowerCase();
+        if (btnAria.includes('repost') || btnText.includes('repost') || btnAria.includes('quote') || btnText.includes('quote') || btnAria.includes('share')) {
+          return { found: false, reason: 'Safety blocked: target element is repost/quote' };
+        }
+
+        btn.scrollIntoView?.({ block: 'nearest' });
+        btn.click();
+        return { found: true, alreadyLiked: false };
+      });
+
+      if (likeInfo.found) {
+        if (!likeInfo.alreadyLiked) {
+          await browserManager.humanDelay(1500, 3000);
+          QuotaModel.increment(this.platform, 'likes_count');
+          LogModel.add(this.platform, 'post_liked', 'Successfully liked Threads post');
+        } else {
+          LogModel.add(this.platform, 'post_already_liked', 'Threads post was already liked');
+        }
+        return { success: true, alreadyLiked: likeInfo.alreadyLiked };
+      }
+
+      return { success: false, reason: likeInfo.reason };
+    } catch (err) {
+      LogModel.add(this.platform, 'like_error', `Failed to like Threads post: ${err.message}`);
+      return { success: false, error: err.message };
+    } finally {
+      if (ownPage && page) {
+        await page.close().catch(() => {});
+      }
+    }
+  }
+
+  /**
    * Posts an AI-synthesized contextual comment on a Threads post
    */
-  async commentOnPost(postUrl, commentText) {
+  async commentOnPost(pageOrUrl, commentText) {
     const quota = QuotaModel.getToday(this.platform);
     const maxComments = parseInt(SettingsModel.get('daily_max_comments') || '20', 10);
 
@@ -151,24 +234,34 @@ export class ThreadsAdapter {
       return { success: false, reason: 'Daily quota exceeded' };
     }
 
-    // If it's a seed or demo URL, simulate verified direct execution on that specific URL
-    if (postUrl.includes('/demo') || postUrl.includes('example.com')) {
-      LogModel.add(this.platform, 'comment_attempt', `Targeting post URL: ${postUrl}`);
-      await browserManager.humanDelay(1000, 2000);
-      QuotaModel.increment(this.platform, 'comments_count');
-      LogModel.add(this.platform, 'comment_posted', `Comment successfully posted on Threads post ${postUrl}`, { postUrl, commentText });
-      return { success: true, post_url: postUrl };
-    }
+    let page;
+    let ownPage = false;
+    let postUrl = '';
 
-    const context = await browserManager.getContext();
-    const page = await context.newPage();
-    const targetUrl = postUrl.replace('threads.net', 'threads.com');
+    if (typeof pageOrUrl === 'string') {
+      postUrl = pageOrUrl;
+      if (postUrl.includes('/demo') || postUrl.includes('example.com')) {
+        LogModel.add(this.platform, 'comment_attempt', `Targeting post URL: ${postUrl}`);
+        await browserManager.humanDelay(1000, 2000);
+        QuotaModel.increment(this.platform, 'comments_count');
+        LogModel.add(this.platform, 'comment_posted', `Comment successfully posted on Threads post ${postUrl}`, { postUrl, commentText });
+        return { success: true, post_url: postUrl };
+      }
 
-    try {
-      LogModel.add(this.platform, 'comment_attempt', `Navigating directly to target post: ${targetUrl}`);
+      const context = await browserManager.getContext();
+      page = await context.newPage();
+      ownPage = true;
+      const targetUrl = postUrl.replace('threads.net', 'threads.com');
       const cleanUrl = targetUrl.split('?')[0].split('#')[0];
       await page.goto(cleanUrl, { timeout: 35000, waitUntil: 'domcontentloaded' });
       await browserManager.humanDelay(2500, 4000);
+    } else {
+      page = pageOrUrl;
+      postUrl = page.url();
+    }
+
+    try {
+      LogModel.add(this.platform, 'comment_attempt', `Commenting on Threads post: ${postUrl}`);
 
       // 1. Dismiss cookie banners or popups
       try {
@@ -366,7 +459,9 @@ export class ThreadsAdapter {
       LogModel.add(this.platform, 'comment_error', `Failed to post comment on ${postUrl}: ${err.message}`);
       return { success: false, error: err.message };
     } finally {
-      await page.close().catch(() => {});
+      if (ownPage && page) {
+        await page.close().catch(() => {});
+      }
     }
   }
 

@@ -187,8 +187,10 @@ Email: hello@surajjaiswal.com`;
     // 6. Pattern-Breaking Cold WhatsApp Outreach
     const cleanWhatsappPitch = `Hello ${salutation}, quick question: why is a practice with ${rating > 0 ? `${rating}⭐ (${reviewsCount} reviews)` : 'top clinical ratings'} in ${lead.city || 'your area'} completely absent from local patient video feeds?\n\nWe put together a private, confidential Rx Growth Prescription for ${lead.business_name}: ${publicScorecardUrl}\n\nInside, we diagnosed 3 patient leakage points and scripted 3 viral educational Reel concepts for your clinic. We also have a 40-second sample showing what your AI Doctor Avatar looks and sounds like.\n\nOpen to seeing that 40-second preview right here? — Suraj Jaiswal, Founder @ The Digital Frog`;
 
-    // 7. Clean Social DM Pitch
-    const cleanDMPitch = `Hey ${salutation}! Noticed your stellar reputation in ${lead.city || 'your area'}. Competing clinics are winning high-ticket cases simply by having doctors on Reels. We generated a private Rx Video Audit for you: ${publicScorecardUrl} — Happy to share a 30-second sample of your AI Video Clone if you'd like to check it out! — Suraj @ The Digital Frog`;
+    // 7. Clean Social DM Pitch with Personalized Scorecard / Audit Report Link
+    const cleanDMPitch = isMedical
+      ? `Hey ${salutation}! Noticed your stellar reputation in ${lead.city || 'your area'}. Competing clinics are winning high-ticket cases simply by having doctors on Reels. We generated a private Rx Video Audit for you: ${publicScorecardUrl} — Happy to share a 30-second sample of your AI Video Clone if you'd like to check it out! — Suraj @ The Digital Frog`
+      : `Hi ${salutation}! Noticed your strong local reputation in ${lead.city || 'your area'}. We put together a complimentary 2-minute Digital Growth & Video Audit for ${lead.business_name}: ${publicScorecardUrl} — Hope it offers actionable insights for your team! — Suraj @ The Digital Frog`;
 
     return {
       scorecardId,
