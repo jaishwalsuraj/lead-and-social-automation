@@ -924,6 +924,16 @@ function initWebSocket() {
           btn.disabled = false;
           btn.innerHTML = '🔍 Find All Socials';
         }
+      } else if (msg.type === 'social_engagement_batch_complete') {
+        loadMapsStats();
+        loadMapsLeads();
+        showLeadNotificationToast('✅ Social Engagement Complete', `Pipeline finished: ${msg.data?.processed || 0} leads engaged.`);
+        appendTerminalLog(`📱 Social engagement pipeline finished: ${msg.data?.processed || 0} leads engaged.`, 'text-emerald');
+        const hBtn = document.getElementById('btn-header-engage-socials');
+        if (hBtn) {
+          hBtn.disabled = false;
+          hBtn.innerHTML = `<span>📱 Engage Socials</span>`;
+        }
       } else if (msg.type === 'maps_scan_complete') {
         loadMapsStats();
         loadMapsLeads();
@@ -4001,14 +4011,34 @@ async function findSingleLeadSocials(leadId) {
   }
 }
 
+async function headerTriggerFindSocials() {
+  if (typeof switchTab === 'function') {
+    switchTab('maps');
+  }
+  await triggerFindAllSocials();
+}
+
+async function headerTriggerEngageSocials() {
+  if (typeof switchTab === 'function') {
+    switchTab('maps');
+  }
+  await triggerAutoSocialEngagement();
+}
+
 async function triggerFindAllSocials() {
   const btn = document.getElementById('btn-maps-find-all-socials');
+  const hBtn = document.getElementById('btn-header-find-socials');
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = `<span class="spinner-small"></span> Hunting Socials...`;
   }
+  if (hBtn) {
+    hBtn.disabled = true;
+    hBtn.innerHTML = `<span class="spinner-small"></span> Hunting...`;
+  }
 
   showLeadNotificationToast('🔍 Bulk Social Media Hunter', 'Searching verified Instagram, Facebook, and LinkedIn profiles for leads missing socials...');
+  appendTerminalLog('🔍 Bulk Social Hunter started: extracting verified Instagram, Facebook & LinkedIn channels...', 'text-info');
 
   try {
     const res = await fetch('/api/maps/find-all-socials', {
@@ -4019,6 +4049,7 @@ async function triggerFindAllSocials() {
     const data = await res.json();
     if (data.success) {
       showLeadNotificationToast('✅ Social Enrichment Complete', `Enriched ${data.count || 0} leads with verified social links!`);
+      appendTerminalLog(`✅ Social hunter finished: ${data.count || 0} leads enriched with social media links.`, 'text-emerald');
       loadMapsLeads();
       loadMapsStats();
     } else {
@@ -4030,6 +4061,10 @@ async function triggerFindAllSocials() {
     if (btn) {
       btn.disabled = false;
       btn.innerHTML = `🔍 Find All Socials`;
+    }
+    if (hBtn) {
+      hBtn.disabled = false;
+      hBtn.innerHTML = `<span>🔍 Find All Socials</span>`;
     }
   }
 }
@@ -4937,6 +4972,12 @@ async function saveSocialAutomationSettings(event) {
 }
 
 async function triggerAutoSocialEngagement() {
+  const hBtn = document.getElementById('btn-header-engage-socials');
+  if (hBtn) {
+    hBtn.disabled = true;
+    hBtn.innerHTML = `<span class="spinner-small"></span> Engaging...`;
+  }
+
   appendTerminalLog('📱 Starting automated social engagement pipeline (Like -> Comment -> DM)...', 'text-info');
   showLeadNotificationToast('📱 Social Pipeline Active', 'Running safe engagement batch adhering to platform rate limits...');
   const statusDiv = document.getElementById('social-auto-status');
@@ -4968,6 +5009,11 @@ async function triggerAutoSocialEngagement() {
     appendTerminalLog(`Social batch error: ${err.message}`, 'text-danger');
     if (statusDiv) {
       statusDiv.innerHTML = `<span style="color: #ef4444;">Error: ${escapeHtml(err.message)}</span>`;
+    }
+  } finally {
+    if (hBtn) {
+      hBtn.disabled = false;
+      hBtn.innerHTML = `<span>📱 Engage Socials</span>`;
     }
   }
 }

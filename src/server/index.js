@@ -915,23 +915,24 @@ app.post('/api/maps/leads/:id/find-socials', requireAuth, async (req, res) => {
 });
 
 // Bulk Hunt & Enrich Social Media links for all Google Maps leads missing socials
-app.post('/api/maps/find-all-socials', requireAuth, async (req, res) => {
-  try {
-    const limit = Math.min(parseInt(req.body.limit || '15', 10), 30);
-    const result = await socialLinkHunter.enrichBatchLeads({
-      limit,
-      onProgress: (prog) => {
-        orchestrator.broadcast('social_hunter_progress', prog);
-      }
-    });
+app.post('/api/maps/find-all-socials', requireAuth, (req, res) => {
+  const limit = Math.min(parseInt(req.body.limit || '15', 10), 30);
+  
+  socialLinkHunter.enrichBatchLeads({
+    limit,
+    onProgress: (prog) => {
+      orchestrator.broadcast('social_hunter_progress', prog);
+    }
+  }).then(result => {
     orchestrator.broadcast('social_hunter_complete', {
       ...result,
       stats: GoogleMapsLeadModel.getStats()
     });
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  }).catch(err => {
+    orchestrator.broadcast('log', { platform: 'google_maps', text: `Social hunt notice: ${err.message}`, error: true });
+  });
+
+  res.json({ success: true, message: 'Bulk social media hunt started in background' });
 });
 
 // ==================== REACHINBOX & COLD EMAIL OUTREACH ROUTES ====================
@@ -1035,9 +1036,26 @@ app.post('/api/maps/leads/:id/engage-social', requireAuth, async (req, res) => {
 app.post('/api/maps/leads/auto-engage-batch', requireAuth, async (req, res) => {
   try {
     const batchSize = Math.min(parseInt(req.body.batchSize || '5', 10), 15);
-    const result = await socialEngagementEngine.runAutomatedEngagementBatch(batchSize);
-    orchestrator.broadcast('social_engagement_batch_complete', result);
-    res.json(result);
+    if (socialEngagementEngine.isProcessing) {
+      return res.json({ success: false, message: 'Social engagement automation is already running in background' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Automated social engagement pipeline started in background',
+      batchSize
+    });
+
+    // Run in background so HTTP request does not hang or timeout
+    (async () => {
+      try {
+        const result = await socialEngagementEngine.runAutomatedEngagementBatch(batchSize);
+        orchestrator.broadcast('social_engagement_batch_complete', result);
+      } catch (err) {
+        console.error('[SocialEngagementEngine] Background batch error:', err.message);
+        orchestrator.broadcast('social_engagement_batch_error', { error: err.message });
+      }
+    })();
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
