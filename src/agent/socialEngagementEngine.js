@@ -2,7 +2,7 @@ import { browserManager } from '../browser/browserManager.js';
 import { instagramAdapter } from '../platforms/instagram.js';
 import { threadsAdapter } from '../platforms/threads.js';
 import { reasoner } from './geminiReasoner.js';
-import { GoogleMapsLeadModel, LogModel, QuotaModel, SettingsModel, db } from '../db/database.js';
+import { GoogleMapsLeadModel, LogModel, QuotaModel, SettingsModel, SocialEngagementModel, db } from '../db/database.js';
 import { MapsScorecardBridge } from './mapsScorecardBridge.js';
 import { checkCountryExclusion } from '../utils/countryFilter.js';
 
@@ -90,17 +90,26 @@ export class SocialEngagementEngine {
           if (cancelBtn) await cancelBtn.click().catch(() => {});
         } catch (_) {}
 
-        // Locate most recent post
-        const firstPostLink = await page.evaluate(() => {
-          const link = document.querySelector('a[href*="/p/"], a[href*="/reel/"]');
-          return link ? link.href : null;
+        // Locate visible post links
+        const candidatePostLinks = await page.evaluate(() => {
+          const links = Array.from(document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]'));
+          return links.map(l => l.href);
         });
+
+        // Filter out posts already engaged in database
+        let targetPostLink = null;
+        for (const pl of candidatePostLinks) {
+          if (!SocialEngagementModel.hasEngagedPost(pl, 'comment')) {
+            targetPostLink = pl;
+            break;
+          }
+        }
 
         let dynamicComment = '';
 
-        if (firstPostLink) {
-          LogModel.add('instagram', 'post_found', `Found recent post for @${igHandle}: ${firstPostLink}`);
-          await page.goto(firstPostLink, { timeout: 35000, waitUntil: 'domcontentloaded' });
+        if (targetPostLink) {
+          LogModel.add('instagram', 'post_found', `Found unengaged post for @${igHandle}: ${targetPostLink}`);
+          await page.goto(targetPostLink, { timeout: 35000, waitUntil: 'domcontentloaded' });
           await browserManager.humanDelay(3000, 4500);
 
           // Step 2: Like the post strictly (NEVER REPOST OR SHARE)
@@ -120,19 +129,43 @@ export class SocialEngagementEngine {
             console.warn('[SocialEngine] Like error:', likeErr.message);
           }
 
-          // Step 3: Extract post caption / message
+          // Step 3: Extract post caption / message cleanly (Strip Instagram metadata headers like "123 likes, 75 comments...")
           const postText = await page.evaluate(() => {
-            const meta = document.querySelector('meta[property="og:description"]')?.getAttribute('content') ||
-                         document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
+            const rawMeta = document.querySelector('meta[property="og:description"]')?.getAttribute('content') ||
+                            document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
+            
+            let cleanMeta = '';
+            if (rawMeta) {
+              const match = rawMeta.match(/^[0-9,kKmM.]+\s+likes?,\s+[0-9,kKmM.]+\s+comments?\s+-\s+[^:]+:\s*"?([\s\S]*)/i);
+              if (match && match[1]) {
+                cleanMeta = match[1].replace(/"?\s*$/, '').trim();
+              } else {
+                cleanMeta = rawMeta;
+              }
+            }
+
             const article = document.querySelector('article') || document.querySelector('div[role="dialog"]') || document.body;
-            const spans = Array.from(article.querySelectorAll('span, div[dir="auto"], h1'));
-            const longest = spans.map(s => (s.innerText || '').trim())
-              .filter(t => t.length > 20 && !t.includes('Like') && !t.includes('Follow') && !t.includes('Reply'))
-              .sort((a, b) => b.length - a.length)[0] || '';
-            return meta || longest || '';
+            const h1Text = article.querySelector('h1')?.innerText?.trim() || '';
+
+            const spans = Array.from(article.querySelectorAll('span, div[dir="auto"]'));
+            const goodSpans = spans.map(s => (s.innerText || '').trim())
+              .filter(t => t.length > 20 &&
+                !/^\d+[smhdwmy]$/i.test(t) &&
+                !t.includes('Like') &&
+                !t.includes('Follow') &&
+                !t.includes('Reply') &&
+                !t.includes('View all') &&
+                !t.includes('See translation') &&
+                !t.includes('Original audio') &&
+                !t.includes('comments') &&
+                !t.includes('likes')
+              )
+              .sort((a, b) => b.length - a.length);
+
+            return cleanMeta || h1Text || goodSpans[0] || '';
           });
 
-          // Step 4: Synthesize dynamic, bespoke comment tailored to the post's message + 1 line demonstrating expertise
+          // Step 4: Synthesize authentic, observational comment (ZERO agency pitches, ZERO "At The Digital Frog")
           dynamicComment = await reasoner.synthesizeSocialEngagementComment({
             postText,
             businessName: lead.business_name,
@@ -141,16 +174,43 @@ export class SocialEngagementEngine {
             platform: 'instagram'
           });
 
-          // Step 5: Post the bespoke comment safely on the post
+          // Step 5: Post the comment safely on the post
           try {
             const commentRes = await instagramAdapter.commentOnPost(page, dynamicComment);
             if (commentRes.success) {
-              logs.push(`Posted bespoke comment: "${dynamicComment}"`);
-              LogModel.add('instagram', 'expert_comment_posted', `Bespoke comment posted on @${igHandle}'s post: "${dynamicComment}"`);
+              if (commentRes.alreadyCommented) {
+                logs.push('Post already had our comment (duplicate prevented)');
+              } else {
+                logs.push(`Posted bespoke comment: "${dynamicComment}"`);
+                LogModel.add('instagram', 'expert_comment_posted', `Bespoke comment posted on @${igHandle}'s post: "${dynamicComment}"`);
+              }
+
+              // IMMEDIATELY record engagement in database to guarantee no duplicates on re-runs
+              SocialEngagementModel.record({
+                leadId: lead.id,
+                platform: 'instagram',
+                profileHandle: igHandle,
+                postUrl: targetPostLink,
+                commentText: dynamicComment,
+                actionType: 'comment',
+                status: 'success'
+              });
+
+              db.prepare(`
+                UPDATE google_maps_leads SET
+                  contact_status = 'engaged',
+                  last_engaged_post_url = ?,
+                  social_engaged_at = CURRENT_TIMESTAMP,
+                  updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+              `).run(targetPostLink, lead.id);
             }
           } catch (cErr) {
             console.warn('[SocialEngine] Comment error:', cErr.message);
           }
+        } else if (candidatePostLinks.length > 0) {
+          logs.push('All recent posts already engaged on Instagram (duplicate prevented)');
+          LogModel.add('instagram', 'already_engaged', `All visible posts for @${igHandle} were already engaged; skipping duplicate comment.`);
         } else {
           logs.push('No public posts found on profile');
         }
@@ -167,7 +227,7 @@ export class SocialEngagementEngine {
           logs.push('Sent personalized DM with audit report link');
           LogModel.add('instagram', 'dm_delivered', `Sent direct message with scorecard to @${igHandle}`, { scorecardUrl });
 
-          // Update lead status in database
+          // Update opportunity summary
           db.prepare(`
             UPDATE google_maps_leads SET
               contact_status = 'engaged',
@@ -212,16 +272,25 @@ export class SocialEngagementEngine {
         await page.goto(`https://www.threads.com/@${threadsHandle}`, { timeout: 35000, waitUntil: 'domcontentloaded' });
         await browserManager.humanDelay(3000, 5000);
 
-        const firstPostLink = await page.evaluate(() => {
-          const link = document.querySelector('a[href*="/post/"]');
-          return link ? link.href : null;
+        // Locate visible Threads post links
+        const candidateThreadsLinks = await page.evaluate(() => {
+          const links = Array.from(document.querySelectorAll('a[href*="/post/"]'));
+          return links.map(l => l.href);
         });
+
+        let targetPostLink = null;
+        for (const pl of candidateThreadsLinks) {
+          if (!SocialEngagementModel.hasEngagedPost(pl, 'comment')) {
+            targetPostLink = pl;
+            break;
+          }
+        }
 
         let dynamicComment = '';
 
-        if (firstPostLink) {
-          LogModel.add('threads', 'post_found', `Found recent Threads post for @${threadsHandle}: ${firstPostLink}`);
-          await page.goto(firstPostLink, { timeout: 35000, waitUntil: 'domcontentloaded' });
+        if (targetPostLink) {
+          LogModel.add('threads', 'post_found', `Found unengaged Threads post for @${threadsHandle}: ${targetPostLink}`);
+          await page.goto(targetPostLink, { timeout: 35000, waitUntil: 'domcontentloaded' });
           await browserManager.humanDelay(3000, 4500);
 
           // Step A: Like the post (NEVER repost/quote)
@@ -260,10 +329,32 @@ export class SocialEngagementEngine {
             if (commentRes.success) {
               logs.push(`Posted bespoke comment on Threads: "${dynamicComment}"`);
               LogModel.add('threads', 'expert_comment_posted', `Bespoke comment posted on @${threadsHandle}'s post: "${dynamicComment}"`);
+
+              // Record in DB immediately
+              SocialEngagementModel.record({
+                leadId: lead.id,
+                platform: 'threads',
+                profileHandle: threadsHandle,
+                postUrl: targetPostLink,
+                commentText: dynamicComment,
+                actionType: 'comment',
+                status: 'success'
+              });
+
+              db.prepare(`
+                UPDATE google_maps_leads SET
+                  contact_status = 'engaged',
+                  last_engaged_post_url = ?,
+                  social_engaged_at = CURRENT_TIMESTAMP,
+                  updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+              `).run(targetPostLink, lead.id);
             }
           } catch (cErr) {
             console.warn('[SocialEngine] Threads comment error:', cErr.message);
           }
+        } else if (candidateThreadsLinks.length > 0) {
+          logs.push('All recent Threads posts already engaged (duplicate prevented)');
         } else {
           logs.push('No public posts found on Threads profile');
         }

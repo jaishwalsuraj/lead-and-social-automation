@@ -269,6 +269,19 @@ export function initDatabase() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_login DATETIME
       );
+      CREATE TABLE IF NOT EXISTS social_engagements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lead_id INTEGER,
+        platform TEXT NOT NULL,
+        profile_handle TEXT NOT NULL,
+        post_url TEXT NOT NULL,
+        comment_text TEXT,
+        action_type TEXT NOT NULL DEFAULT 'comment',
+        status TEXT NOT NULL DEFAULT 'success',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_social_engagements_post ON social_engagements(post_url);
+      CREATE INDEX IF NOT EXISTS idx_social_engagements_handle ON social_engagements(profile_handle);
     `);
 
     // Verification columns on social leads table
@@ -286,6 +299,8 @@ export function initDatabase() {
     if (!mapsCols.includes('is_medical')) db.exec("ALTER TABLE google_maps_leads ADD COLUMN is_medical INTEGER DEFAULT 0");
     if (!mapsCols.includes('doctor_prescription')) db.exec("ALTER TABLE google_maps_leads ADD COLUMN doctor_prescription TEXT");
     if (!mapsCols.includes('social_audit')) db.exec("ALTER TABLE google_maps_leads ADD COLUMN social_audit TEXT");
+    if (!mapsCols.includes('last_engaged_post_url')) db.exec("ALTER TABLE google_maps_leads ADD COLUMN last_engaged_post_url TEXT");
+    if (!mapsCols.includes('social_engaged_at')) db.exec("ALTER TABLE google_maps_leads ADD COLUMN social_engaged_at DATETIME");
 
     // Scorecard PDF columns
     const scCols = db.prepare('PRAGMA table_info(scorecard_leads)').all().map(c => c.name);
@@ -1584,6 +1599,40 @@ export const SettingsModel = {
   set: (key, value) => {
     const valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
     return db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, valStr);
+  }
+};
+
+export const SocialEngagementModel = {
+  hasEngagedPost: (postUrl, actionType = 'comment') => {
+    if (!postUrl) return false;
+    const cleanUrl = postUrl.split('?')[0].split('#')[0].replace(/\/+$/, '');
+    const row = db.prepare(`
+      SELECT id FROM social_engagements 
+      WHERE (post_url = ? OR post_url LIKE ? OR post_url LIKE ?)
+        AND action_type = ? 
+        AND status = 'success'
+      LIMIT 1
+    `).get(postUrl, `${cleanUrl}%`, `%${cleanUrl}%`, actionType);
+    return !!row;
+  },
+  record: (engagement) => {
+    return db.prepare(`
+      INSERT INTO social_engagements (lead_id, platform, profile_handle, post_url, comment_text, action_type, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      engagement.leadId || null,
+      engagement.platform || 'instagram',
+      engagement.profileHandle || '',
+      engagement.postUrl || '',
+      engagement.commentText || null,
+      engagement.actionType || 'comment',
+      engagement.status || 'success'
+    );
+  },
+  getRecentEngagements: (limit = 50) => {
+    return db.prepare(`
+      SELECT * FROM social_engagements ORDER BY created_at DESC LIMIT ?
+    `).all(limit);
   }
 };
 

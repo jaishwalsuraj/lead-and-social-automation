@@ -1,6 +1,6 @@
 import { browserManager } from '../browser/browserManager.js';
 import { reasoner } from '../agent/geminiReasoner.js';
-import { LeadModel, LogModel, QuotaModel, SettingsModel, parsePostAge } from '../db/database.js';
+import { LeadModel, LogModel, QuotaModel, SettingsModel, SocialEngagementModel, parsePostAge } from '../db/database.js';
 
 export class InstagramAdapter {
   constructor() {
@@ -368,6 +368,33 @@ export class InstagramAdapter {
         throw new Error(`Target Instagram post is unavailable or private: ${postUrl}`);
       }
 
+      // 2b. DEDUPLICATION GUARD: Check if we or our account already commented on this post!
+      const alreadyCommentedCheck = await page.evaluate((targetComment) => {
+        // Find all visible comment author usernames
+        const authorLinks = Array.from(document.querySelectorAll('article a[role="link"], div[role="dialog"] a[role="link"], ul a[role="link"]'));
+        const handlesOnPost = authorLinks.map(a => (a.innerText || a.getAttribute('href') || '').toLowerCase().replace(/[^a-z0-9._]/g, ''));
+
+        // Identify logged in username
+        const myProfileA = document.querySelector('svg[aria-label="Profile"]')?.closest('a') ||
+                           document.querySelector('a[href^="/"][role="link"]:has(img[alt*="profile"])');
+        const myHandle = (myProfileA?.getAttribute('href') || '').replace(/\//g, '').toLowerCase() || 'autotoonbytes';
+
+        const alreadyPresent = handlesOnPost.includes(myHandle);
+
+        // Also check if text from target comment is already on the page
+        const bodyText = document.body ? document.body.innerText : '';
+        const snippet = (targetComment || '').slice(0, 30).trim();
+        const snippetPresent = snippet.length > 10 && bodyText.includes(snippet);
+
+        return { alreadyPresent, snippetPresent, myHandle };
+      }, commentText);
+
+      if (alreadyCommentedCheck.alreadyPresent || alreadyCommentedCheck.snippetPresent) {
+        console.log(`[Instagram] ⚠️ Prevented duplicate comment on ${postUrl} (Found existing comment by @${alreadyCommentedCheck.myHandle} or matching text).`);
+        LogModel.add(this.platform, 'duplicate_comment_prevented', `Skipped duplicate comment on ${postUrl} (@${alreadyCommentedCheck.myHandle} already commented)`);
+        return { success: true, alreadyCommented: true, post_url: postUrl, message: 'Already commented on this post' };
+      }
+
       // 3. Locate comment input trigger or contenteditable box
       const inputSelectors = [
         'textarea[placeholder*="Add a comment" i]',
@@ -435,12 +462,8 @@ export class InstagramAdapter {
       await browserManager.humanType(page, activeInput, commentText);
       await browserManager.humanDelay(1500, 2500);
 
-      // 6. Submit via Enter key
-      await page.keyboard.press('Enter');
-      await browserManager.humanDelay(2000, 3500);
-
-      // 7. Verify submission or click STRICT "Post" button (EXPLICITLY NEVER REPOST)
-      const submitInfo = await page.evaluate(() => {
+      // 6. SINGLE-ACTION Submission: Use Post button IF present, otherwise Enter key (NEVER BOTH!)
+      const clickedPostBtn = await page.evaluate(() => {
         const btns = Array.from(document.querySelectorAll('div[role="button"], button'));
         for (const b of btns) {
           const text = (b.innerText || '').trim().toLowerCase();
@@ -451,14 +474,26 @@ export class InstagramAdapter {
                                 !text.includes('tag') && !text.includes('emoji');
           if (isExactPost && isNotForbidden && !b.disabled && b.getAttribute('aria-disabled') !== 'true') {
             b.click();
-            return { clicked: true, method: 'strict_post_button' };
+            return true;
           }
         }
-        return { clicked: false, method: 'enter_key' };
+        return false;
       });
 
-      console.log('[Instagram] Comment submission result:', submitInfo);
-      await browserManager.humanDelay(2000, 4000);
+      if (!clickedPostBtn) {
+        // If no explicit Post button found, use Enter key
+        await page.keyboard.press('Enter');
+      }
+
+      await browserManager.humanDelay(2500, 4000);
+
+      // 7. Verify and clear any remaining stale text in the input
+      await page.evaluate(() => {
+        const textareas = document.querySelectorAll('textarea, div[role="textbox"]');
+        for (const ta of textareas) {
+          if (ta.value) ta.value = '';
+        }
+      }).catch(() => {});
 
       QuotaModel.increment(this.platform, 'comments_count');
       LogModel.add(this.platform, 'comment_posted', `Comment posted on Instagram!`, { postUrl, commentText });
