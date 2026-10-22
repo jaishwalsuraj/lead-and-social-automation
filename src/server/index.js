@@ -24,6 +24,7 @@ import { socialEngagementEngine } from '../agent/socialEngagementEngine.js';
 import { checkCountryExclusion, validateSearchTargeting } from '../utils/countryFilter.js';
 import { GroupsEngine } from '../platforms/groupsEngine.js';
 import { BulkLeadImporter } from '../agent/bulkLeadImporter.js';
+import { socialLinkHunter } from '../agent/socialLinkHunter.js';
 
 import { loginRateLimiter, forgotPwRateLimiter, resetPwRateLimiter, publicApiRateLimiter, applySecurityHeaders, isPathSafe } from './security.js';
 
@@ -899,6 +900,38 @@ app.post('/api/maps/reverify-all', requireAuth, (req, res) => {
   });
 
   res.json({ success: true, message: 'Batch re-verification started in background' });
+});
+
+// Hunt & Enrich Social Media links for a single Google Maps Lead
+app.post('/api/maps/leads/:id/find-socials', requireAuth, async (req, res) => {
+  try {
+    const result = await socialLinkHunter.enrichLead(req.params.id);
+    const updatedLead = GoogleMapsLeadModel.getById(req.params.id);
+    orchestrator.broadcast('maps_lead_updated', { lead: updatedLead });
+    res.json({ success: true, ...result, lead: updatedLead });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Bulk Hunt & Enrich Social Media links for all Google Maps leads missing socials
+app.post('/api/maps/find-all-socials', requireAuth, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.body.limit || '15', 10), 30);
+    const result = await socialLinkHunter.enrichBatchLeads({
+      limit,
+      onProgress: (prog) => {
+        orchestrator.broadcast('social_hunter_progress', prog);
+      }
+    });
+    orchestrator.broadcast('social_hunter_complete', {
+      ...result,
+      stats: GoogleMapsLeadModel.getStats()
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ==================== REACHINBOX & COLD EMAIL OUTREACH ROUTES ====================

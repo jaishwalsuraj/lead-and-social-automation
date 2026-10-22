@@ -3,6 +3,7 @@ import { GoogleMapsLeadModel, LogModel, SettingsModel } from '../db/database.js'
 import { NICHE_REGISTRY, detectNiche } from '../agent/scorecardEngine.js';
 import { checkCountryExclusion, validateSearchTargeting } from '../utils/countryFilter.js';
 import { MapsScorecardBridge } from '../agent/mapsScorecardBridge.js';
+import { socialLinkHunter } from '../agent/socialLinkHunter.js';
 
 export class GoogleMapsAdapter {
   constructor() {
@@ -57,61 +58,129 @@ export class GoogleMapsAdapter {
         await page.waitForTimeout(1500);
       }
 
-      // Scroll feed to load candidate listings
-      const feed = await page.$('div[role="feed"]');
-      if (feed) {
-        // Collect enough candidate cards (at least 2.5x the requested limit to account for website/contact filtering)
-        const targetRawCards = Math.max(limit * 3, 25);
-        const scrollIterations = Math.min(Math.ceil(targetRawCards / 5), 10);
-        for (let s = 0; s < scrollIterations; s++) {
-          await feed.evaluate(el => el.scrollBy(0, 1600));
-          await page.waitForTimeout(1000);
-        }
+      // Wait for search result cards or feed container
+      await page.waitForSelector('div.Nv2PK, div[role="feed"], div.m6QErb', { timeout: 15000 }).catch(() => {});
+
+      // Locate scrollable feed container
+      let feed = await page.$('div[role="feed"]');
+      if (!feed) {
+        feed = await page.$('div.m6QErb.DxyBCb, .m6QErb[aria-label]');
       }
 
-      // Extract candidate place cards from feed
-      const rawCandidates = await page.evaluate(() => {
-        const items = [];
-        const cardElements = document.querySelectorAll('div.Nv2PK');
+      // Helper function to extract cards currently present in DOM
+      const extractFeedCards = async () => {
+        return await page.evaluate(() => {
+          const items = [];
+          const cardElements = document.querySelectorAll('div.Nv2PK');
 
-        cardElements.forEach(el => {
-          const link = el.querySelector('a.hfpxzc');
-          const name = link?.getAttribute('aria-label') || el.querySelector('.fontHeadlineSmall')?.textContent?.trim();
-          const mapsUrl = link?.getAttribute('href') || null;
+          cardElements.forEach(el => {
+            const link = el.querySelector('a.hfpxzc');
+            const name = link?.getAttribute('aria-label') || el.querySelector('.fontHeadlineSmall')?.textContent?.trim();
+            const mapsUrl = link?.getAttribute('href') || null;
 
-          if (!name || !mapsUrl) return;
+            if (!name || !mapsUrl) return;
 
-          const ratingEl = el.querySelector('span[role="img"]');
-          const ratingText = ratingEl?.getAttribute('aria-label') || '';
-          
-          const ratingMatch = ratingText.match(/([\d.]+)\s*stars?/i) || el.innerText.match(/\b([1-5]\.\d)\b/);
-          const rating = ratingMatch ? parseFloat(ratingMatch[1]) : null;
+            // Direct website presence check on card in feed
+            const webBtn = el.querySelector('a[aria-label*="website" i], a[data-value="Website"], a.lcr4fd');
+            const hasWebsite = Boolean(webBtn);
+            const websiteUrl = webBtn ? (webBtn.getAttribute('href') || null) : null;
 
-          const reviewsMatch = ratingText.match(/\(([\d,]+)\)/) || el.innerText.match(/\(([\d,]+)\)/) || el.innerText.match(/([\d,]+)\s*reviews?/i);
-          const reviewsCount = reviewsMatch ? parseInt(reviewsMatch[1].replace(/,/g, ''), 10) : 0;
+            // Rating & Review count
+            const ratingEl = el.querySelector('span[role="img"]');
+            const ratingText = ratingEl?.getAttribute('aria-label') || '';
+            const ratingMatch = ratingText.match(/([\d.]+)\s*stars?/i) || el.innerText.match(/\b([1-5]\.\d)\b/);
+            const rating = ratingMatch ? parseFloat(ratingMatch[1]) : null;
 
-          items.push({
-            name,
-            mapsUrl,
-            rating,
-            reviewsCount
+            const reviewsMatch = ratingText.match(/\(([\d,]+)\)/) || el.innerText.match(/\(([\d,]+)\)/) || el.innerText.match(/([\d,]+)\s*reviews?/i);
+            const reviewsCount = reviewsMatch ? parseInt(reviewsMatch[1].replace(/,/g, ''), 10) : 0;
+
+            // Phone snippet from card text
+            const cardText = el.innerText || '';
+            const phoneMatch = cardText.match(/(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\+?\d{1,4}[-.\s]?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}/);
+            const feedPhone = phoneMatch ? phoneMatch[0].trim() : null;
+
+            // Category snippet (usually right after rating e.g. "Plumber · ")
+            const catMatch = cardText.match(/(?:stars?\s*\([^)]*\)\s*·|reviews?\s*·)\s*([A-Za-z\s&'-]+?)(?:\s*·|\s*\n|$)/i);
+            const feedCategory = catMatch ? catMatch[1].trim() : null;
+
+            // Address snippet
+            const addrMatch = cardText.match(/·\s*([^·\n]+(?:\b(?:Rd|St|Ave|Blvd|Dr|Lane|Way|Ct|Plaza|Pkwy|Hwy|Road|Street|Avenue|Drive|Suite|Bldg)\b[^·\n]*))/i);
+            const feedAddress = addrMatch ? addrMatch[1].trim() : null;
+
+            items.push({
+              name,
+              mapsUrl,
+              hasWebsite,
+              websiteUrl,
+              rating,
+              reviewsCount,
+              feedPhone,
+              feedCategory,
+              feedAddress
+            });
           });
+          return items;
         });
+      };
 
-        // Deduplicate by name and mapsUrl
-        const unique = [];
+      // Dynamically scroll feed to gather required candidate cards
+      let rawCandidates = [];
+      const maxScrolls = noWebsiteOnly ? 25 : Math.min(Math.max(Math.ceil(limit / 2), 6), 15);
+      
+      for (let s = 0; s < maxScrolls; s++) {
+        if (feed) {
+          await feed.evaluate(el => el.scrollBy(0, 1800));
+        } else {
+          await page.evaluate(() => window.scrollBy(0, 1000));
+        }
+        await page.waitForTimeout(1100);
+
+        const currentList = await extractFeedCards();
+        // Deduplicate candidates
         const seen = new Set();
-        for (const item of items) {
+        rawCandidates = [];
+        for (const item of currentList) {
           const key = (item.mapsUrl || item.name).toLowerCase();
           if (!seen.has(key)) {
             seen.add(key);
-            unique.push(item);
+            rawCandidates.push(item);
           }
         }
-        return unique;
-      });
 
-      console.log(`[GoogleMaps] Extracted ${rawCandidates.length} candidate places for "${fullQuery}"`);
+        // When searching for No Website only, check if target count reached
+        if (noWebsiteOnly) {
+          const noWebCount = rawCandidates.filter(c => !c.hasWebsite).length;
+          if (noWebCount >= limit) {
+            console.log(`[GoogleMaps] Reached target ${limit} no-website candidates after ${s + 1} scrolls.`);
+            break;
+          }
+        } else {
+          if (rawCandidates.length >= limit * 1.5) {
+            break;
+          }
+        }
+
+        // Check if end of Google Maps results reached
+        const isEnd = await page.evaluate(() => {
+          return document.body.innerText.includes("You've reached the end of the list");
+        });
+        if (isEnd) {
+          console.log('[GoogleMaps] Reached end of Google Maps feed.');
+          break;
+        }
+      }
+
+      console.log(`[GoogleMaps] Extracted ${rawCandidates.length} total candidate places for "${fullQuery}"`);
+
+      // Pre-filter candidates if noWebsiteOnly is enabled to eliminate needless place inspections
+      if (noWebsiteOnly) {
+        const totalBefore = rawCandidates.length;
+        rawCandidates = rawCandidates.filter(c => !c.hasWebsite);
+        console.log(`[GoogleMaps] Filtered for No Website: ${rawCandidates.length} of ${totalBefore} places have NO website.`);
+        if (rawCandidates.length === 0) {
+          LogModel.add(this.platform, 'scan_notice', `Found ${totalBefore} local listings for "${fullQuery}", but all of them have websites. Tip: Uncheck "No Website Only" to discover all verified local businesses for AI Chatbots, SEO, and Google Review management.`);
+        }
+      }
 
       // Close the search feed page to save memory while inspecting individual places
       await page.close().catch(() => {});
@@ -225,8 +294,9 @@ export class GoogleMapsAdapter {
     let placeData = null;
 
     try {
-      await placePage.goto(candidate.mapsUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
-      await placePage.waitForTimeout(2000);
+      await placePage.goto(candidate.mapsUrl, { waitUntil: 'domcontentloaded', timeout: 18000 });
+      await placePage.waitForSelector('h1, div.m6QErb, [data-item-id="authority"], [data-item-id="address"]', { timeout: 5000 }).catch(() => {});
+      await placePage.waitForTimeout(1000);
 
       placeData = await placePage.evaluate(() => {
         // 1. Official Website Link Check (100% accurate authority item)
@@ -267,13 +337,34 @@ export class GoogleMapsAdapter {
         return { hasWebsite, websiteUrl, phone, address, category };
       });
     } catch (pageErr) {
-      console.error(`[GoogleMaps] Failed to inspect place page for ${candidate.name}:`, pageErr.message);
+      console.warn(`[GoogleMaps] Notice on place page for ${candidate.name}: ${pageErr.message} - using feed snapshot`);
     } finally {
       await placePage.close().catch(() => {});
     }
 
+    // Merge placeData with candidate feed baseline
     if (!placeData) {
-      return null;
+      placeData = {
+        hasWebsite: candidate.hasWebsite || false,
+        websiteUrl: candidate.websiteUrl || null,
+        phone: candidate.feedPhone || null,
+        address: candidate.feedAddress || '',
+        category: candidate.feedCategory || query
+      };
+    } else {
+      if (!placeData.websiteUrl && candidate.websiteUrl) {
+        placeData.websiteUrl = candidate.websiteUrl;
+        placeData.hasWebsite = true;
+      }
+      if (!placeData.phone && candidate.feedPhone) {
+        placeData.phone = candidate.feedPhone;
+      }
+      if (!placeData.address && candidate.feedAddress) {
+        placeData.address = candidate.feedAddress;
+      }
+      if (!placeData.category && candidate.feedCategory) {
+        placeData.category = candidate.feedCategory;
+      }
     }
 
     // Clean Phone String
@@ -315,6 +406,18 @@ export class GoogleMapsAdapter {
         }
       } catch (searchErr) {
         console.warn(`[GoogleMaps] Web search fallback error for ${candidate.name}:`, searchErr.message);
+      }
+    }
+
+    // Contact Enrichment Phase 3: If Instagram or Facebook are missing, hunt verified socials via Google Search
+    if (!socialLinks.instagram || !socialLinks.facebook) {
+      try {
+        const cleanCityName = location.split(',')[0].trim();
+        const cleanCategoryName = placeData.category || query;
+        const hunted = await socialLinkHunter.searchSocialsGoogle(candidate.name, cleanCityName, cleanCategoryName, context);
+        socialLinks = { ...hunted, ...socialLinks };
+      } catch (huntErr) {
+        console.warn(`[GoogleMaps] Social hunter notice for ${candidate.name}:`, huntErr.message);
       }
     }
 

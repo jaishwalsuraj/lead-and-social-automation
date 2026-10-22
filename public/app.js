@@ -911,6 +911,19 @@ function initWebSocket() {
           btn.disabled = false;
           btn.innerHTML = '⚡ Re-Verify All Leads';
         }
+      } else if (msg.type === 'social_hunter_progress') {
+        const p = msg.data;
+        const foundStr = Object.keys(p.socials || {}).join(', ') || 'searching...';
+        appendTerminalLog(`🔍 [Social Hunter] (${p.current}/${p.total}) ${p.lead}: ${foundStr}`, 'text-info');
+      } else if (msg.type === 'social_hunter_complete') {
+        loadMapsStats();
+        loadMapsLeads();
+        showLeadNotificationToast('✅ Social Media Hunt Complete', `Enriched ${msg.data.count || 0} leads with verified social profiles.`);
+        const btn = document.getElementById('btn-maps-find-all-socials');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '🔍 Find All Socials';
+        }
       } else if (msg.type === 'maps_scan_complete') {
         loadMapsStats();
         loadMapsLeads();
@@ -3491,7 +3504,11 @@ function renderMapsLeadCard(lead) {
               <button class="btn btn-sm btn-outline-call" onclick="engageSingleSocialLead(${lead.id})" title="Auto-engage: Like recent post -> Expert comment -> DM with Scorecard">
                 📱 Engage Social
               </button>
-            ` : ''}
+            ` : `
+              <button class="btn btn-sm btn-outline-call" id="btn-find-socials-lead-${lead.id}" onclick="findSingleLeadSocials(${lead.id})" title="Hunt verified Instagram, Facebook, and LinkedIn links">
+                🔍 Find Socials
+              </button>
+            `}
             <button class="btn btn-sm ${isMedical ? 'btn-primary btn-medical-rx' : 'btn-primary'}" onclick="openMapsPitchModal(${lead.id})" title="${isMedical ? 'View Doctor Rx Prescription, Social Audit & AI Avatar Plan' : `View ${niche.name} Growth Blueprint & AI Pitch`}">
               ${isMedical ? '🩺 View Doctor Rx & Audit' : `${niche.icon} View Growth Blueprint`}
             </button>
@@ -3948,6 +3965,71 @@ async function triggerBatchReverify() {
     if (btn) {
       btn.disabled = false;
       btn.innerHTML = '⚡ Re-Verify All Leads';
+    }
+  }
+}
+
+async function findSingleLeadSocials(leadId) {
+  const btn = document.getElementById(`btn-find-socials-lead-${leadId}`);
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-small"></span> Hunting...`;
+  }
+
+  showLeadNotificationToast('🔍 Hunting Social Profiles', 'Searching website DOM and Google for verified Instagram, Facebook, and LinkedIn links...');
+
+  try {
+    const res = await fetch(`/api/maps/leads/${leadId}/find-socials`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success && data.lead) {
+      const idx = allMapsLeads.findIndex(l => l.id === leadId);
+      if (idx !== -1) allMapsLeads[idx] = data.lead;
+      renderMapsCards(allMapsLeads);
+      loadMapsStats();
+      const addedList = data.newlyAdded && data.newlyAdded.length > 0 ? data.newlyAdded.join(', ') : 'Verified';
+      showLeadNotificationToast('✅ Socials Updated', `${data.lead.business_name}: Found ${addedList}`);
+    } else {
+      alert(data.error || 'Failed to hunt socials for lead');
+    }
+  } catch (err) {
+    alert('Social hunt error: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `🔍 Find Socials`;
+    }
+  }
+}
+
+async function triggerFindAllSocials() {
+  const btn = document.getElementById('btn-maps-find-all-socials');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-small"></span> Hunting Socials...`;
+  }
+
+  showLeadNotificationToast('🔍 Bulk Social Media Hunter', 'Searching verified Instagram, Facebook, and LinkedIn profiles for leads missing socials...');
+
+  try {
+    const res = await fetch('/api/maps/find-all-socials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ limit: 15 })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showLeadNotificationToast('✅ Social Enrichment Complete', `Enriched ${data.count || 0} leads with verified social links!`);
+      loadMapsLeads();
+      loadMapsStats();
+    } else {
+      alert(data.error || data.message || 'Failed to start bulk social search');
+    }
+  } catch (err) {
+    alert('Bulk social search error: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `🔍 Find All Socials`;
     }
   }
 }
